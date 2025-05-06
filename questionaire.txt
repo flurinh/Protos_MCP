@@ -1,0 +1,8 @@
+Create a dataset
+
+Protein stabilization?
+
+For a mutationscreen can we find meaningful targets (instead of n^20 we go to n^k, k=k best options based on protein stability,
+red-shift, ...)
+
+
