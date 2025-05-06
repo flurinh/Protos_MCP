@@ -63,6 +63,7 @@ def import_protos(ctx: Context) -> str:
     except ImportError as e:
         return f"Failed to import protos: {str(e)}"
 
+
 @mcp.tool()
 def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
     """Initialize the folder structure required by protos"""
@@ -72,12 +73,13 @@ def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
         # Import protos
         import protos
 
-        # Define the base path for data
-        if base_path:
-            protos_ctx.base_path = base_path
+        if base_path is None:
+            base_path = Path(__file__).parent / "data"
         else:
-            # Use default path in user's home directory
-            protos_ctx.base_path = os.path.join(os.path.expanduser("~"), "protos_data")
+            base_path = Path(base_path)
+
+        # Set the context base path
+        protos_ctx.base_path = base_path
 
         # Create main directory structure
         os.makedirs(protos_ctx.base_path, exist_ok=True)
