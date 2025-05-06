@@ -100,7 +100,7 @@ def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
         protos_ctx.initialized = True
         return f"Folder structure initialized at: {protos_ctx.base_path}"
     except Exception as e:
-        return f"Failed to initialize folder structure: {str(e)}"
+        return f"Failed to initialize folder structure: {str(e)}, path is {protos_ctx.base_path}"
 
 
 @mcp.tool()
