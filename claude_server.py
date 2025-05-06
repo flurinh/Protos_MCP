@@ -14,6 +14,7 @@ import shutil
 import json
 
 
+
 # Define context types for type safety
 @dataclass
 class ProtosContext:
@@ -70,21 +71,24 @@ def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
     protos_ctx = ctx.request_context.lifespan_context
 
     try:
-        # Import protos
-        import protos
-
+        # Resolve base_path early and independently
         if base_path is None:
-            base_path = Path(__file__).parent / "data"
+            try:
+                base_path = Path(__file__).parent / "data"
+            except NameError:
+                base_path = Path.cwd() / "data"
         else:
             base_path = Path(base_path)
 
-        # Set the context base path
+        # Assign early so it's available even if an error occurs later
         protos_ctx.base_path = base_path
 
-        # Create main directory structure
-        os.makedirs(protos_ctx.base_path, exist_ok=True)
+        # Import protos
+        import protos  # move after base_path is set
 
-        # Create subdirectories based on the test files
+        # Create main directory structure
+        base_path.mkdir(parents=True, exist_ok=True)
+
         subdirs = [
             "structure/mmcif",
             "structure/alphafold_structures",
@@ -93,14 +97,13 @@ def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
             "sequence/metadata"
         ]
 
-        # Create each subdirectory
         for subdir in subdirs:
-            os.makedirs(os.path.join(protos_ctx.base_path, subdir), exist_ok=True)
+            (base_path / subdir).mkdir(parents=True, exist_ok=True)
 
         protos_ctx.initialized = True
-        return f"Folder structure initialized at: {protos_ctx.base_path}"
+        return f"Folder structure initialized at: {base_path}"
     except Exception as e:
-        return f"Failed to initialize folder structure: {str(e)}, path is {protos_ctx.base_path}"
+        return f"Failed to initialize folder structure: {str(e)}, path is {getattr(protos_ctx, 'base_path', 'unknown')}"
 
 
 @mcp.tool()
