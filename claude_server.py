@@ -73,10 +73,7 @@ def initialize_folders(ctx: Context, base_path: Optional[str] = None) -> str:
     try:
         # Resolve base_path early and independently
         if base_path is None:
-            try:
-                base_path = Path(__file__).parent / "data"
-            except NameError:
-                base_path = Path.cwd() / "data"
+            base_path = Path.home() / "Documents" / "Protos_MCP"
         else:
             base_path = Path(base_path)
 
