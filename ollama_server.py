@@ -1,8 +1,8 @@
 """
-Protos MCP Server - Clean implementation leveraging Protos data management.
+Protos MCP Server for Ollama - Clean implementation leveraging Protos data management.
 
 This server provides Model Context Protocol access to Protos functionality
-with zero path management required from users.
+with Ollama as the backend LLM.
 """
 
 import sys
@@ -32,7 +32,7 @@ from mcp_server.tools.guide import ProtoGuideTools
 @asynccontextmanager
 async def protos_lifespan(server: FastMCP) -> AsyncIterator[ServerContext]:
     """Initialize Protos infrastructure on server startup."""
-    print("Initializing Protos MCP Server...", file=sys.stderr)
+    print("Initializing Protos MCP Server for Ollama...", file=sys.stderr)
     
     try:
         # Load configuration
@@ -45,14 +45,14 @@ async def protos_lifespan(server: FastMCP) -> AsyncIterator[ServerContext]:
         # Register all tools
         register_tools(server, context)
         
-        print("Protos MCP Server initialized successfully", file=sys.stderr)
+        print("Protos MCP Server for Ollama initialized successfully", file=sys.stderr)
         yield context
         
     except Exception as e:
         print(f"Failed to initialize server: {e}", file=sys.stderr)
         raise
     finally:
-        print("Shutting down Protos MCP Server...", file=sys.stderr)
+        print("Shutting down Protos MCP Server for Ollama...", file=sys.stderr)
 
 
 def register_tools(server: FastMCP, context: ServerContext):
@@ -80,7 +80,7 @@ def register_tools(server: FastMCP, context: ServerContext):
 
 
 # Create the MCP server
-mcp = FastMCP("Protos MCP Server", lifespan=protos_lifespan)
+mcp = FastMCP("Protos MCP Server for Ollama", lifespan=protos_lifespan)
 
 
 # Basic test tool to verify server is working
@@ -96,20 +96,20 @@ def get_server_info(ctx) -> dict:
         else:
             # Fallback if context structure is different
             return {
-                "server": "Protos MCP Server",
+                "server": "Protos MCP Server for Ollama",
                 "version": "0.1.0",
                 "status": "running",
                 "note": "Unable to access full context"
             }
         
         return {
-            "server": "Protos MCP Server",
+            "server": "Protos MCP Server for Ollama",
             "version": "0.1.0",
             "stats": context.get_stats() if hasattr(context, 'get_stats') else {}
         }
     except Exception as e:
         return {
-            "server": "Protos MCP Server",
+            "server": "Protos MCP Server for Ollama",
             "version": "0.1.0",
             "error": str(e)
         }
@@ -119,10 +119,11 @@ def main():
     """Run the server."""
     # Check if we're running via MCP
     if "--help" in sys.argv or "-h" in sys.argv:
-        print("Protos MCP Server")
+        print("Protos MCP Server for Ollama")
         print("\nUsage:")
-        print("  python claude_server.py        # Run as MCP server")
-        print("  mcp install claude_server.py   # Install for Claude Desktop")
+        print("  python ollama_server.py        # Run as MCP server")
+        print("  mcp install ollama_server.py   # Install for Ollama integration")
+        print("\nNote: Ensure Ollama is running and accessible at http://localhost:11434")
         return
     
     # Run the server

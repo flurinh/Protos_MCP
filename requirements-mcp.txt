@@ -1,0 +1,5 @@
+# MCP Server Requirements
+mcp>=0.1.0
+# Protos dependencies are assumed to be already installed
+# If not, install protos first:
+# cd protos && pip install -e .
