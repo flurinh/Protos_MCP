@@ -6,11 +6,14 @@ identity calculation, conservation analysis, and mutation detection.
 """
 
 from typing import Dict, List, Optional, Any, Tuple, Union
+from datetime import datetime
 import json
 import logging
 
 from ..base import BaseTool
 from ...core.exceptions import InvalidInputError, EntityNotFoundError
+from protos.analysis.sequence.alignment_engine import SequenceAlignmentEngine
+from protos.analysis.sequence.mmseqs_interface import MMseqsUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,252 @@ class SequenceAnalysisTools(BaseTool):
     
     def register(self, server):
         """Register sequence analysis tools with the server."""
-        
+
+        @server.tool()
+        def list_sequence_entities(ctx, limit: Optional[int] = None, offset: int = 0) -> Dict:
+            """List registered sequence entities with optional pagination."""
+
+            try:
+                processor = self.get_processor("sequence")
+                entities = processor.list_entities()
+                total = len(entities)
+                start = max(offset, 0)
+                end = start + limit if limit else total
+                sliced = entities[start:end]
+
+                return self.format_success(
+                    {
+                        "total": total,
+                        "offset": start,
+                        "count": len(sliced),
+                        "entities": sliced,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def load_sequence(
+            ctx,
+            sequence_id: str,
+            include_sequence: bool = False,
+            preview_length: int = 120,
+        ) -> Dict:
+            """Load a sequence entity and return summary details."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"sequence_id": sequence_id},
+                    ["sequence_id"],
+                ):
+                    return error
+
+                processor = self.get_processor("sequence")
+                entity = processor.load_entity(sequence_id)
+                if entity is None:
+                    return self.format_error(
+                        f"Sequence '{sequence_id}' not found",
+                        "Use sequence_download or sequence_register_records first.",
+                    )
+
+                payload: Dict[str, Any] = {
+                    "sequence_id": sequence_id,
+                    "entity_type": "multi" if isinstance(entity, dict) and len(entity) > 1 else "single",
+                }
+
+                if isinstance(entity, str):
+                    payload["length"] = len(entity)
+                    if include_sequence:
+                        payload["sequence"] = entity
+                    else:
+                        payload["preview"] = entity[:preview_length]
+                elif isinstance(entity, dict):
+                    summary = {
+                        key: {
+                            "length": len(value) if isinstance(value, str) else None,
+                            "preview": value[:preview_length] if isinstance(value, str) else None,
+                        }
+                        for key, value in list(entity.items())[:25]
+                    }
+                    payload["sequences"] = summary
+                    payload["sequence_count"] = len(entity)
+                    if include_sequence and len(entity) <= 50:
+                        payload["full_sequences"] = entity
+                else:
+                    payload["data"] = entity
+
+                return self.format_success(payload)
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def load_sequence_dataset(
+            ctx,
+            dataset_name: str,
+            include_sequences: bool = False,
+            max_sequences: int = 50,
+            preview_length: int = 120,
+        ) -> Dict:
+            """Load a sequence dataset and summarize its members."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name},
+                    ["dataset_name"],
+                ):
+                    return error
+
+                processor = self.get_processor("sequence")
+                manager = processor.dataset_manager
+                if not manager.dataset_exists(dataset_name):
+                    return self.format_error(
+                        f"Sequence dataset '{dataset_name}' not found",
+                        "Use dataset.list_datasets or create the dataset first.",
+                    )
+
+                dataset = processor.load_dataset(dataset_name)
+                if not isinstance(dataset, dict):
+                    dataset = dict(dataset)
+
+                info = manager.get_dataset_info(dataset_name)
+
+                summary = []
+                for key, value in list(dataset.items())[:max_sequences]:
+                    length = len(value) if isinstance(value, str) else None
+                    preview = value[:preview_length] if isinstance(value, str) else None
+                    summary.append(
+                        {
+                            "sequence_id": key,
+                            "length": length,
+                            "preview": preview,
+                        }
+                    )
+
+                payload: Dict[str, Any] = {
+                    "dataset_name": dataset_name,
+                    "sequence_count": len(dataset),
+                    "metadata": info.get("metadata", {}),
+                    "entities": summary,
+                    "truncated": len(dataset) > len(summary),
+                }
+
+                if include_sequences and len(dataset) <= max_sequences:
+                    payload["sequences"] = dataset
+
+                return self.format_success(payload)
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_save_sequences(
+            ctx,
+            sequences: Dict[str, str],
+            output_file: Optional[str] = None,
+            dataset_name: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            materialize_entities: bool = False,
+        ) -> Dict:
+            """Persist multiple sequences via SequenceProcessor.save_sequences."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"sequences": sequences},
+                    ["sequences"],
+                ):
+                    return error
+
+                if not sequences:
+                    return self.format_error(
+                        "No sequences provided",
+                        "Pass a non-empty mapping of sequence_id -> sequence",
+                    )
+
+                processor = self.get_processor("sequence")
+                base_name = output_file or dataset_name or "saved_sequences"
+                dataset_key = dataset_name or base_name
+
+                path = processor.save_sequences(
+                    sequences,
+                    output_file=base_name,
+                    dataset_name=dataset_key,
+                    metadata=metadata,
+                    materialize_entities=materialize_entities,
+                )
+
+                manager = processor.dataset_manager
+                dataset_info = manager.get_dataset_info(dataset_key)
+
+                return self.format_success(
+                    {
+                        "dataset_name": dataset_key,
+                        "artifact_path": str(path),
+                        "sequence_count": len(sequences),
+                        "materialized": materialize_entities,
+                        "metadata": dataset_info.get("metadata", {}),
+                    },
+                    message="Sequences saved",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_export_dataset(
+            ctx,
+            dataset_name: str,
+            export_name: Optional[str] = None,
+            sequence_ids: Optional[List[str]] = None,
+            materialize_entities: bool = False,
+            overwrite: bool = True,
+            format: str = "fasta",
+        ) -> Dict:
+            """Export a sequence dataset to a managed FASTA artifact."""
+
+            try:
+                processor = self.get_processor("sequence")
+                exported = processor.export_dataset(
+                    dataset_name,
+                    export_name=export_name,
+                    format=format,
+                    overwrite=overwrite,
+                    sequence_ids=sequence_ids,
+                    materialize_entities=materialize_entities,
+                )
+
+                return self.format_success(
+                    exported,
+                    message="Dataset exported",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_export_entity(
+            ctx,
+            sequence_id: str,
+            export_name: Optional[str] = None,
+            sequence_ids: Optional[List[str]] = None,
+            overwrite: bool = True,
+            format: str = "fasta",
+        ) -> Dict:
+            """Export a single sequence entity to FASTA."""
+
+            try:
+                processor = self.get_processor("sequence")
+                exported = processor.export_entity(
+                    sequence_id,
+                    export_name=export_name,
+                    format=format,
+                    overwrite=overwrite,
+                    sequence_ids=sequence_ids,
+                )
+
+                return self.format_success(
+                    exported,
+                    message="Sequence exported",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
         @server.tool()
         def align_sequences(ctx, sequence1: str, sequence2: str,
                           alignment_method: str = "blosum62",
@@ -95,10 +343,13 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_sequences_by_id(ctx, entity1: str, entity2: str,
-                                alignment_method: str = "blosum62",
-                                gap_open: int = -10,
-                                gap_extend: int = -1) -> Dict:
+        def align_sequences_by_id(
+            ctx,
+            entity1: str,
+            entity2: str,
+            alignment_method: str = "blosum62",
+            store_alignment: bool = True,
+        ) -> Dict:
             """
             Perform pairwise sequence alignment using entity identifiers.
             
@@ -106,14 +357,13 @@ class SequenceAnalysisTools(BaseTool):
             the full sequence strings as input.
             
             Args:
-                entity1: Entity identifier for first sequence
-                entity2: Entity identifier for second sequence
-                alignment_method: Alignment method ("blosum62", "pam250", etc.)
-                gap_open: Gap opening penalty
-                gap_extend: Gap extension penalty
-                
+                entity1: Entity identifier for first sequence.
+                entity2: Entity identifier for second sequence.
+                alignment_method: Currently only ``"blosum62"`` is supported.
+                store_alignment: If True, persist the alignment via SequenceProcessor.
+
             Returns:
-                Dictionary with alignment results
+                Dictionary with alignment results.
             """
             try:
                 # Validate parameters
@@ -155,51 +405,419 @@ class SequenceAnalysisTools(BaseTool):
                     )
                 
                 # Perform alignment
-                from protos.processing.sequence.seq_alignment import init_aligner, align_blosum62, format_alignment
-                
-                aligner = init_aligner()
-                
-                if alignment_method == "blosum62":
-                    alignment = align_blosum62(seq1, seq2, aligner, 
-                                             gap_open=gap_open, gap_extend=gap_extend)
-                else:
-                    alignment = aligner.align(seq1, seq2, 
-                                            gap_open=gap_open, gap_extend=gap_extend)[0][0]
-                
-                # Format alignment
-                formatted = format_alignment(alignment)
-                
-                # Calculate statistics
-                aligned_seq1 = str(alignment.seqA)
-                aligned_seq2 = str(alignment.seqB)
-                
-                matches = sum(1 for a, b in zip(aligned_seq1, aligned_seq2) if a == b and a != '-')
-                length = len([a for a, b in zip(aligned_seq1, aligned_seq2) if a != '-' or b != '-'])
-                identity = matches / length if length > 0 else 0
-                
-                return self.format_success({
-                    "entity1": entity1,
-                    "entity2": entity2,
-                    "alignment": formatted,
-                    "score": float(alignment.score),
-                    "identity": round(identity, 3),
-                    "matches": matches,
-                    "length": length,
-                    "gaps_seq1": aligned_seq1.count('-'),
-                    "gaps_seq2": aligned_seq2.count('-'),
-                    "method": alignment_method
-                })
+                if alignment_method.lower() != "blosum62":
+                    return self.format_error(
+                        f"Unsupported alignment method '{alignment_method}'",
+                        "Currently only 'blosum62' alignment is exposed through this tool.",
+                    )
+
+                score, formatted = processor.align_sequences(
+                    seq1,
+                    seq2,
+                    seq1_id=entity1,
+                    seq2_id=entity2,
+                    store_alignment=store_alignment,
+                )
+
+                aligned_seq1, aligned_midline, aligned_seq2 = formatted
+                matches = sum(1 for a, b in zip(aligned_seq1, aligned_seq2) if a == b and a != "-")
+                length = len([1 for a, b in zip(aligned_seq1, aligned_seq2) if a != "-" or b != "-"])
+                identity = matches / length if length else 0.0
+
+                return self.format_success(
+                    {
+                        "entity1": entity1,
+                        "entity2": entity2,
+                        "alignment": formatted,
+                        "score": float(score),
+                        "identity": round(identity, 3),
+                        "matches": matches,
+                        "length": length,
+                        "gaps_seq1": aligned_seq1.count("-"),
+                        "gaps_seq2": aligned_seq2.count("-"),
+                        "method": "blosum62",
+                    }
+                )
                 
             except Exception as e:
                 return self.handle_error(e)
         
+
+
+
+        @server.tool()
+        def sequence_align_to_reference(
+            ctx,
+            reference_id: str,
+            sequence_ids: List[str],
+            save_alignments: bool = False,
+            aligned_dataset_name: Optional[str] = None,
+            include_reference_in_dataset: bool = True,
+            summary_name: Optional[str] = None,
+            property_table_name: Optional[str] = None,
+        ) -> Dict:
+            """Align multiple sequences against a reference using SequenceProcessor helpers."""
+
+            if error := self.validate_required_params(
+                {"reference_id": reference_id, "sequence_ids": sequence_ids},
+                ["reference_id", "sequence_ids"],
+            ):
+                return error
+
+            if not sequence_ids:
+                return self.format_error(
+                    "No sequences provided",
+                    "Provide one or more sequence IDs to align against the reference.",
+                )
+
+            processor = self.get_processor("sequence")
+
+            try:
+                reference_sequence = processor.get_sequence(reference_id)
+                if reference_sequence is None:
+                    return self.format_error(
+                        f"Reference sequence '{reference_id}' not available",
+                        "Ensure the reference sequence is registered via the sequence loader or processor.",
+                    )
+
+                missing = [sid for sid in sequence_ids if sid != reference_id and processor.get_sequence(sid) is None]
+                if missing:
+                    return self.format_error(
+                        f"Sequences not available: {', '.join(missing)}",
+                        "Load sequences first with sequence_download or register_sequence.",
+                    )
+
+                summary_metadata = {
+                    "requested_by": "sequence_align_to_reference",
+                    "requested_at": datetime.utcnow().isoformat(),
+                }
+
+                summary_payload, _ = processor.align_and_record(
+                    sequence_ids=sequence_ids,
+                    reference_id=reference_id,
+                    save_alignments=save_alignments,
+                    summary_name=summary_name,
+                    summary_metadata=summary_metadata,
+                    aligned_dataset_name=aligned_dataset_name,
+                    aligned_dataset_include_reference=include_reference_in_dataset,
+                    property_table_name=property_table_name,
+                )
+
+                payload: Dict[str, Any] = {
+                    "reference_id": reference_id,
+                    "sequence_ids": sequence_ids,
+                    "summary": summary_payload.get("alignment", {}).get("global"),
+                    "alignments": summary_payload.get("alignment", {}).get("pairwise"),
+                }
+
+                if summary_payload.get("summary_file"):
+                    payload["summary_file"] = summary_payload["summary_file"]
+                if summary_payload.get("summary_dataset"):
+                    payload["summary_dataset"] = summary_payload["summary_dataset"]
+                if summary_payload.get("aligned_dataset") is not None:
+                    payload["aligned_dataset"] = summary_payload["aligned_dataset"]
+                if summary_payload.get("aligned_sequences"):
+                    payload["aligned_sequences"] = summary_payload["aligned_sequences"]
+                if summary_payload.get("property_table"):
+                    payload["property_table"] = summary_payload["property_table"]
+                if summary_payload.get("metadata"):
+                    payload["metadata"] = summary_payload["metadata"]
+                if summary_payload.get("errors"):
+                    payload["errors"] = summary_payload["errors"]
+
+                return self.format_success(payload)
+
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def sequence_align_mmseqs(
+            ctx,
+            sequences: Optional[Dict[str, str]] = None,
+            sequence_ids: Optional[List[str]] = None,
+            dataset_name: Optional[str] = None,
+        ) -> Dict:
+            """Run MMseqs pairwise alignment over a collection of sequences."""
+
+            try:
+                sequence_map: Dict[str, str] = {}
+                processor = self.get_processor("sequence")
+
+                if sequences:
+                    sequence_map = sequences
+                elif dataset_name:
+                    dataset = processor.load_dataset(dataset_name)
+                    if isinstance(dataset, dict):
+                        sequence_map = {
+                            key: value
+                            for key, value in dataset.items()
+                            if isinstance(value, str)
+                        }
+                elif sequence_ids:
+                    for seq_id in sequence_ids:
+                        entity = processor.load_entity(seq_id)
+                        if isinstance(entity, str):
+                            sequence_map[seq_id] = entity
+                        elif isinstance(entity, dict):
+                            sequence_map.update(entity)
+                        else:
+                            return self.format_error(
+                                f"Sequence '{seq_id}' is empty or unsupported",
+                                "Ensure the sequence entity contains FASTA content",
+                            )
+                else:
+                    return self.format_error(
+                        "No sequences specified",
+                        "Provide a dataset name, a mapping of sequences, or sequence IDs",
+                    )
+
+                if not sequence_map:
+                    return self.format_error(
+                        "No sequences available for MMseqs alignment",
+                        "Check that supplied identifiers reference valid sequence data",
+                    )
+
+                engine = SequenceAlignmentEngine()
+                try:
+                    mmseqs_output = engine.align_pairwise_mmseqs(sequence_map)
+                except MMseqsUnavailableError as exc:
+                    return self.format_error(
+                        "MMseqs2 is not available",
+                        str(exc),
+                    )
+
+                if mmseqs_output is None:
+                    return self.format_error(
+                        "MMseqs alignment returned no data",
+                        "Check that MMseqs is installed and produced valid results.",
+                    )
+
+                payload: Dict[str, Any] = {
+                    "sequence_count": len(sequence_map),
+                    "source": dataset_name or sequence_ids or list(sequence_map.keys()),
+                }
+
+                # Convert DataFrame-like outputs to JSON-serialisable records
+                if hasattr(mmseqs_output, "to_dict") and hasattr(mmseqs_output, "columns"):
+                    records = mmseqs_output.to_dict(orient="records")  # type: ignore[assignment]
+                    payload.update(
+                        {
+                            "result_type": "table",
+                            "columns": list(getattr(mmseqs_output, "columns", [])),
+                            "rows": records,
+                            "row_count": len(records),
+                        }
+                    )
+                else:
+                    lines = list(mmseqs_output)
+                    payload.update(
+                        {
+                            "result_type": "lines",
+                            "lines": lines,
+                            "line_count": len(lines),
+                        }
+                    )
+
+                return self.format_success(payload)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_find_best_match(
+            ctx,
+            *,
+            query_sequence: Optional[str] = None,
+            query_entity: Optional[str] = None,
+            reference_sequences: Optional[Dict[str, str]] = None,
+            reference_ids: Optional[List[str]] = None,
+            reference_dataset: Optional[str] = None,
+            use_mmseqs: bool = True,
+        ) -> Dict:
+            """Find the best-matching reference sequence for a query."""
+
+            try:
+                processor = self.get_processor("sequence")
+
+                if query_sequence is None and query_entity is None:
+                    return self.format_error(
+                        "Missing query sequence",
+                        "Provide either `query_sequence` or `query_entity`.",
+                    )
+
+                if query_sequence is None and query_entity is not None:
+                    entity_data = processor.load_entity(query_entity)
+                    if isinstance(entity_data, str):
+                        query_sequence = entity_data
+                    elif isinstance(entity_data, dict):
+                        if entity_data:
+                            query_sequence = next(iter(entity_data.values()))
+                    if not query_sequence:
+                        return self.format_error(
+                            f"Sequence entity '{query_entity}' has no data",
+                            "Ensure the entity exists and contains FASTA content.",
+                        )
+
+                references: Dict[str, str] = {}
+                if reference_sequences:
+                    references.update(reference_sequences)
+
+                if reference_ids:
+                    for ref_id in reference_ids:
+                        data = processor.load_entity(ref_id)
+                        if isinstance(data, str):
+                            references[ref_id] = data
+                        elif isinstance(data, dict):
+                            references.update({f"{ref_id}:{k}": v for k, v in data.items()})
+
+                if reference_dataset:
+                    dataset = processor.load_dataset(reference_dataset)
+                    for ref_id, record in dataset.items():
+                        if isinstance(record, str):
+                            references.setdefault(ref_id, record)
+                        elif isinstance(record, dict):
+                            for sub_id, seq in record.items():
+                                references.setdefault(f"{ref_id}:{sub_id}", seq)
+
+                if not references:
+                    return self.format_error(
+                        "No reference sequences provided",
+                        "Supply `reference_ids`, `reference_dataset`, or `reference_sequences`.",
+                    )
+
+                best_id, score, alignment = processor.find_best_match(
+                    query_sequence,
+                    references,
+                    use_mmseqs=use_mmseqs,
+                )
+
+                response = {
+                    "query_entity": query_entity,
+                    "query_sequence_length": len(query_sequence) if query_sequence else 0,
+                    "best_match": best_id,
+                    "score": score,
+                    "alignment": alignment,
+                    "reference_count": len(references),
+                }
+
+                if best_id is None:
+                    return self.format_success(response, message="No reference produced a valid alignment")
+
+                return self.format_success(response)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_dataset_stats(
+            ctx,
+            dataset_name: str,
+            include_entities: bool = False,
+        ) -> Dict:
+            """Summarize a sequence dataset (entity counts, length stats)."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name}, ["dataset_name"],
+            ):
+                return error
+
+            processor = self.get_processor("sequence")
+
+            manager = getattr(processor, "dataset_manager", None)
+            if manager is None or not manager.dataset_exists(dataset_name):
+                return self.format_error(
+                    f"Sequence dataset '{dataset_name}' not found",
+                    "Use dataset.list_datasets to confirm available sequence datasets.",
+                )
+
+            dataset = processor.load_dataset(dataset_name)
+            if isinstance(dataset, dict):
+                sequences = dataset
+            else:
+                sequences = {}
+                for key, value in dataset.items():
+                    if isinstance(value, str):
+                        sequences[key] = value
+
+            lengths = [len(seq) for seq in sequences.values() if isinstance(seq, str)]
+            stats = {
+                "dataset_name": dataset_name,
+                "entity_count": len(sequences),
+                "length_min": min(lengths) if lengths else None,
+                "length_max": max(lengths) if lengths else None,
+                "length_mean": sum(lengths) / len(lengths) if lengths else None,
+            }
+
+            if include_entities:
+                stats["entities"] = list(sequences.keys())[: min(25, len(sequences))]
+                stats["truncated"] = len(sequences) > min(25, len(sequences))
+
+            return self.format_success(stats)
+
+        @server.tool()
+        def sequence_annotate_with_grn(
+            ctx,
+            reference_table: str,
+            protein_family: str,
+            dataset_name: Optional[str] = None,
+            sequences: Optional[Dict[str, str]] = None,
+            entity_names: Optional[List[str]] = None,
+            output_table: Optional[str] = None,
+            allow_create: bool = False,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict:
+            """Annotate sequences with GRN positions using bundled references."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"reference_table": reference_table, "protein_family": protein_family},
+                    ["reference_table", "protein_family"],
+                ):
+                    return error
+
+                processor = self.get_processor("sequence")
+                annotations, summary = processor.annotate_with_grn(
+                    dataset_name=dataset_name,
+                    sequences=sequences,
+                    entity_names=entity_names,
+                    reference_table=reference_table,
+                    protein_family=protein_family,
+                    output_table=output_table,
+                    allow_create=allow_create,
+                    metadata=metadata,
+                    return_summary=True,
+                )
+
+                annotation_rows = annotations.reset_index().to_dict(orient="records")
+
+                payload: Dict[str, Any] = {
+                    "reference_table": reference_table,
+                    "protein_family": protein_family,
+                    "annotations": annotation_rows,
+                    "columns": list(annotations.columns),
+                    "sequence_count": len(annotations),
+                    "summary": summary,
+                }
+
+                if dataset_name:
+                    payload["dataset_name"] = dataset_name
+                if entity_names:
+                    payload["entity_names"] = entity_names
+                if output_table:
+                    payload["output_table"] = output_table
+
+                return self.format_success(payload)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
         @server.tool()
         def calculate_sequence_identity(ctx, sequences: Dict[str, str],
                                       reference_sequence: Optional[str] = None) -> Dict:
             """
             Calculate pairwise sequence identities using raw sequences.
             
-            Note: For entity-based identity calculation, use calculate_identity_from_dataset instead.
+            Note: For entity-based identity calculation, use sequence_calculate_identity_from_dataset instead.
             
             Args:
                 sequences: Dictionary mapping sequence IDs to sequences (raw strings)
@@ -277,7 +895,7 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def calculate_identity_from_dataset(ctx, dataset_name: str,
+        def sequence_calculate_identity_from_dataset(ctx, dataset_name: str,
                                           reference_entity: Optional[str] = None) -> Dict:
             """
             Calculate pairwise sequence identities for all sequences in a dataset.
@@ -401,13 +1019,13 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def find_conserved_regions(ctx, sequences: Dict[str, str],
+        def sequence_find_conserved_regions(ctx, sequences: Dict[str, str],
                                  min_conservation: float = 0.8,
                                  min_length: int = 5) -> Dict:
             """
             Find conserved regions across multiple sequences using raw sequences.
             
-            Note: For dataset-based conservation analysis, use find_conserved_regions_in_dataset instead.
+            Note: For dataset-based conservation analysis, use sequence_find_conserved_regions_in_dataset instead.
             
             Args:
                 sequences: Dictionary mapping sequence IDs to sequences (raw strings)
@@ -499,7 +1117,7 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def find_conserved_regions_in_dataset(ctx, dataset_name: str,
+        def sequence_find_conserved_regions_in_dataset(ctx, dataset_name: str,
                                             min_conservation: float = 0.8,
                                             min_length: int = 5) -> Dict:
             """
@@ -595,12 +1213,12 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def detect_mutations(ctx, wild_type: str, variant: str,
+        def sequence_detect_mutations(ctx, wild_type: str, variant: str,
                            numbering_start: int = 1) -> Dict:
             """
             Detect mutations between wild-type and variant sequences using raw sequences.
             
-            Note: For entity-based mutation detection, use detect_mutations_between_entities instead.
+            Note: For entity-based mutation detection, use sequence_detect_mutations_between_entities instead.
             
             Args:
                 wild_type: Wild-type sequence (raw string)
@@ -708,7 +1326,7 @@ class SequenceAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def detect_mutations_between_entities(ctx, reference_entity: str, 
+        def sequence_detect_mutations_between_entities(ctx, reference_entity: str,
                                             variant_entity: str,
                                             include_positions: bool = True) -> Dict:
             """
@@ -1161,73 +1779,70 @@ class SequenceAnalysisTools(BaseTool):
                 struct_processor = self.get_processor("structure")
                 seq_processor = self.get_processor("sequence")
                 
-                # Load structure dataset
-                try:
-                    dataset = struct_processor.load_dataset(dataset_name)
-                    entities = dataset.content if hasattr(dataset, 'content') else dataset.entities
-                except Exception as e:
+                entities = struct_processor.get_dataset_entities(dataset_name)
+
+                if not entities:
                     return self.format_error(
-                        f"Failed to load structure dataset: {str(e)}",
-                        "Ensure dataset exists in structure processor"
+                        f"Dataset '{dataset_name}' has no registered structures",
+                        "Use structure tools to populate the dataset first"
                     )
-                
-                # Extract sequences from each structure
-                extracted_sequences = {}
-                failed_extractions = []
-                
+
+                chain_filter: Optional[Union[str, List[str], Dict[str, List[str]]]]
+                if chain_selection:
+                    chain_filter = chain_selection
+                else:
+                    chain_filter = None
+
+                collected = struct_processor.collect_chain_sequences(
+                    entities,
+                    chain_filter=chain_filter,
+                )
+
+                extracted_sequences: Dict[str, str] = {}
+                failed_extractions: List[Dict[str, Any]] = []
+
                 for entity in entities:
-                    try:
-                        # Load structure
-                        struct_processor.load_structures([entity])
-                        
-                        if chain_selection:
-                            # Extract specific chain
-                            seq = struct_processor.get_sequence(entity, chain_selection)
-                            if seq:
-                                seq_id = f"{entity}_{chain_selection}"
-                                extracted_sequences[seq_id] = seq
-                        else:
-                            # Extract all chains
-                            all_seqs = struct_processor.get_all_sequences()
-                            for chain_id, seq in all_seqs.items():
-                                if chain_id.startswith(f"{entity}_"):
-                                    extracted_sequences[chain_id] = seq
-                                    
-                    except Exception as e:
-                        failed_extractions.append({
-                            "entity": entity,
-                            "error": str(e)
-                        })
-                
+                    chains = collected.get(entity, {})
+                    if not chains:
+                        failed_extractions.append(
+                            {
+                                "entity": entity,
+                                "error": "No chains matched selection",
+                            }
+                        )
+                        continue
+
+                    for payload in chains.values():
+                        seq_id = payload.get("entity_name")
+                        sequence = payload.get("sequence")
+                        if not seq_id or not sequence:
+                            continue
+                        extracted_sequences[seq_id] = sequence
+
                 if not extracted_sequences:
                     return self.format_error(
                         "No sequences could be extracted",
                         "Check structure dataset and chain selection"
                     )
-                
                 # Save as dataset if requested
-                saved_entities = []
+                saved_entities: List[str] = []
                 if save_as_dataset:
                     try:
-                        # Save each sequence
-                        for seq_id, sequence in extracted_sequences.items():
-                            seq_processor.save_entity(seq_id, sequence)
-                            saved_entities.append(seq_id)
-                        
-                        # Create sequence dataset
-                        import pandas as pd
-                        seq_dataset = seq_processor.create_standard_dataset(
-                            dataset_id=save_as_dataset,
-                            name=f"Sequences from {dataset_name}",
-                            content=list(extracted_sequences.keys()),
-                            metadata={
-                                "source_dataset": dataset_name,
-                                "chain_selection": chain_selection,
-                                "extraction_date": str(pd.Timestamp.now())
-                            }
+                        metadata = {
+                            "source_dataset": dataset_name,
+                            "chain_selection": chain_selection,
+                        }
+
+                        seq_processor.save_sequences(
+                            extracted_sequences,
+                            save_as_dataset,
+                            dataset_name=save_as_dataset,
+                            metadata=metadata,
+                            materialize_entities=True,
                         )
-                        seq_processor.save_dataset(seq_dataset)
-                        
+
+                        saved_entities = list(extracted_sequences.keys())
+
                     except Exception as e:
                         logger.warning(f"Failed to save sequences: {e}")
                 
@@ -1245,8 +1860,186 @@ class SequenceAnalysisTools(BaseTool):
                 
                 if failed_extractions:
                     result["failed_extractions"] = failed_extractions
-                
+
                 return self.format_success(result)
-                
+
             except Exception as e:
                 return self.handle_error(e)
+
+        @server.tool()
+        def sequence_create_mutant_library(
+            ctx,
+            base_sequence_id: str,
+            mutation_map: Dict[str, List[str]],
+            base_name: Optional[str] = None,
+            include_wildtype: bool = True,
+            limit: Optional[int] = None,
+            zero_indexed: bool = False,
+            register_mutations: bool = False,
+            register: Optional[bool] = None,
+            field_register: Optional[bool] = None,
+            dataset_name: Optional[str] = None,
+            materialize_entities: bool = False,
+            metadata: Optional[Dict[str, Any]] = None,
+            return_metadata: bool = False,
+        ) -> Dict:
+            """Generate a mutant library and optionally persist it."""
+
+            if error := self.validate_required_params(
+                {"base_sequence_id": base_sequence_id, "mutation_map": mutation_map},
+                ["base_sequence_id", "mutation_map"],
+            ):
+                return error
+
+            processor = self.get_processor("sequence")
+
+            try:
+                normalized_map: Dict[int, List[str]] = {}
+                for key, values in mutation_map.items():
+                    try:
+                        pos = int(key)
+                    except ValueError as exc:
+                        raise ValueError(f"Mutation map key '{key}' is not an integer") from exc
+                    normalized_map[pos] = values
+
+                register_flag = register if register is not None else register_mutations
+                if field_register is not None:
+                    register_flag = field_register
+
+                result = processor.create_mutant_library(
+                    base_sequence_id=base_sequence_id,
+                    mutation_map=normalized_map,
+                    base_name=base_name,
+                    include_wildtype=include_wildtype,
+                    limit=limit,
+                    zero_indexed=zero_indexed,
+                    register=register_flag,
+                    dataset_name=dataset_name,
+                    materialize_entities=materialize_entities,
+                    metadata=metadata,
+                    return_metadata=return_metadata,
+                )
+
+                variants: Dict[str, str]
+                dataset_path: Optional[str] = None
+                metadata_records: Optional[List[Dict[str, Any]]] = None
+
+                if return_metadata:
+                    if register_flag:
+                        variants, metadata_df, dataset_path = result  # type: ignore[misc]
+                        metadata_records = metadata_df.to_dict(orient="records")
+                    else:
+                        variants, metadata_df = result  # type: ignore[misc]
+                        metadata_records = metadata_df.to_dict(orient="records")
+                else:
+                    if register_flag:
+                        variants, dataset_path = result  # type: ignore[misc]
+                    else:
+                        variants = result  # type: ignore[assignment]
+
+                payload: Dict[str, Any] = {
+                    "variant_count": len(variants),
+                    "variants": list(variants.keys()),
+                    "library": dict(variants),
+                }
+
+                if dataset_path:
+                    payload["dataset_path"] = dataset_path
+
+                if metadata_records is not None:
+                    payload["metadata"] = metadata_records
+
+                return self.format_success(payload, message="Mutant library generated")
+
+            except Exception as exc:
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_compute_conservation(
+            ctx,
+            dataset_name: Optional[str] = None,
+            sequences: Optional[Dict[str, str]] = None,
+            ignore_gaps: bool = True,
+            pseudocount: float = 0.0,
+            normalize_entropy: bool = True,
+            store_result: bool = False,
+            result_name: Optional[str] = None,
+        ) -> Dict:
+            """Compute per-position conservation across aligned sequences."""
+
+            if not dataset_name and not sequences:
+                return self.format_error(
+                    "No sequences provided",
+                    "Specify a dataset_name or pass an explicit sequence mapping.",
+                )
+
+            processor = self.get_processor("sequence")
+
+            try:
+                df = processor.compute_conservation(
+                    sequences=sequences,
+                    dataset_name=dataset_name,
+                    ignore_gaps=ignore_gaps,
+                    pseudocount=pseudocount,
+                    normalize_entropy=normalize_entropy,
+                    store_result=store_result,
+                    result_name=result_name,
+                )
+
+                summary = {
+                    "positions": int(len(df)),
+                    "top_conserved": df.nsmallest(5, "entropy").to_dict(orient="records"),
+                    "most_variable": df.nlargest(5, "entropy").to_dict(orient="records"),
+                }
+
+                if not store_result:
+                    summary["full_table"] = df.to_dict(orient="records")
+
+                return self.format_success(summary)
+
+            except Exception as exc:
+                return self.handle_error(exc)
+
+        @server.tool()
+        def sequence_compute_linkage(
+            ctx,
+            dataset_name: Optional[str] = None,
+            sequences: Optional[Dict[str, str]] = None,
+            ignore_gaps: bool = True,
+            min_observations: int = 5,
+            normalize: bool = True,
+            top_k: Optional[int] = 20,
+            store_result: bool = False,
+            result_name: Optional[str] = None,
+        ) -> Dict:
+            """Compute residue linkage using mutual information."""
+
+            if not dataset_name and not sequences:
+                return self.format_error(
+                    "No sequences provided",
+                    "Specify a dataset_name or pass an explicit sequence mapping.",
+                )
+
+            processor = self.get_processor("sequence")
+
+            try:
+                df = processor.compute_linkage(
+                    sequences=sequences,
+                    dataset_name=dataset_name,
+                    ignore_gaps=ignore_gaps,
+                    min_observations=min_observations,
+                    normalize=normalize,
+                    top_k=top_k,
+                    store_result=store_result,
+                    result_name=result_name,
+                )
+
+                return self.format_success(
+                    {
+                        "pair_count": int(len(df)),
+                        "pairs": df.to_dict(orient="records"),
+                    }
+                )
+
+            except Exception as exc:
+                return self.handle_error(exc)

@@ -7,6 +7,7 @@ needing to know file paths or internal structure.
 
 from typing import Dict, List, Optional, Any
 import re
+import sys
 
 from ..base import BaseTool
 from ...core.exceptions import InvalidInputError
@@ -19,7 +20,7 @@ class EntityDiscoveryTools(BaseTool):
         """Register entity discovery tools with the server."""
         
         @server.tool()
-        def list_entities(ctx, processor_type: str, 
+        def entity_list_entities(ctx, processor_type: str, 
                          limit: Optional[int] = None,
                          offset: Optional[int] = None) -> Dict:
             """
@@ -85,7 +86,7 @@ class EntityDiscoveryTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def search_entities(ctx, query: str,
+        def entity_search_entities(ctx, query: str,
                           processor_types: Optional[List[str]] = None,
                           regex: bool = False,
                           case_sensitive: bool = False) -> Dict:

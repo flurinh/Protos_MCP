@@ -21,14 +21,24 @@ class BaseTool(ABC):
     def __init__(self, context):
         """
         Initialize with server context.
-        
+
         Args:
             context: ServerContext instance
         """
         self.context = context
-        self.paths = context.paths
-        self.registry = context.entity_registry
         self.manager = ProtosManager(context)
+
+    @property
+    def paths(self):
+        """Lazy access to ProtosPaths via the shared context."""
+
+        return self.context.paths
+
+    @property
+    def registry(self):
+        """Lazy access to the EntityRegistry via the shared context."""
+
+        return self.context.entity_registry
     
     def get_processor(self, processor_type: str):
         """

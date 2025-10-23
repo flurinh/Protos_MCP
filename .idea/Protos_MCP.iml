@@ -3,6 +3,12 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/protos/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/GraphscoreDTA" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/LigandMPNN" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/Pocket2Mol" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/PocketDTA" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/bioemu" />
+      <excludeFolder url="file://$MODULE_DIR$/protos/src/protos/models/lambda" />
     </content>
     <orderEntry type="jdk" jdkName="protos310" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

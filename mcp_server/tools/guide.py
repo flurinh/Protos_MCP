@@ -60,7 +60,7 @@ class ProtoGuideTools(BaseTool):
             })
         
         @server.tool()
-        def workflow_example(ctx, workflow_type: str) -> Dict:
+        def guide_workflow_example(ctx, workflow_type: str) -> Dict:
             """
             Get step-by-step examples of common Protos workflows.
             
@@ -100,7 +100,7 @@ class ProtoGuideTools(BaseTool):
             })
         
         @server.tool()
-        def explain_concept(ctx, concept: str) -> Dict:
+        def guide_explain_concept(ctx, concept: str) -> Dict:
             """
             Get detailed explanation of Protos concepts.
             
@@ -169,40 +169,124 @@ class ProtoGuideTools(BaseTool):
         """Get processors guide content."""
         return {
             "title": "Understanding Processors",
-            "description": "Processors are specialized modules that handle different biological data types",
-            "available_processors": {
+            "description": "Each processor owns the zero-config load/list/save APIs for its data type. Loaders pull data in; list/load tools inspect what you already have; analysis helpers mirror the test workflows.",
+            "processors": {
                 "structure": {
-                    "handles": "3D protein structures (PDB/mmCIF files)",
-                    "key_methods": ["load_structures", "save_structure", "get_sequence"],
-                    "use_for": "Structure analysis, coordinate extraction, chain information"
+                    "handles": "3D structures (PDB/mmCIF)",
+                    "list_load": [
+                        "list_structure_entities",
+                        "load_structure",
+                        "load_structure_dataset",
+                        "structure_dataset_stats",
+                        "structure_filter_dataset",
+                    ],
+                    "analysis": [
+                        "structure_collect_chain_sequences",
+                        "structure_align_to_reference",
+                        "structure_extract_water_molecules",
+                        "structure_compute_water_networks",
+                        "structure_apply_grn_annotations",
+                        "structure_graph_generate_from_dataset",
+                        "structure_graph_load_entity",
+                    ],
+                    "export": [
+                        "structure_export_entity",
+                        "structure_export_dataset",
+                    ],
+                    "loaders": ["structure_download", "structure_download_batch"],
                 },
                 "sequence": {
-                    "handles": "Protein/DNA/RNA sequences (FASTA format)",
-                    "key_methods": ["load_sequence", "save_entity", "align_sequences"],
-                    "use_for": "Sequence alignment, conservation analysis, mutation detection"
+                    "handles": "Protein / DNA / RNA sequences",
+                    "list_load": [
+                        "list_sequence_entities",
+                        "load_sequence",
+                        "load_sequence_dataset",
+                        "sequence_dataset_stats",
+                    ],
+                    "analysis": [
+                        "sequence_align_to_reference",
+                        "sequence_align_mmseqs",
+                        "sequence_compute_conservation",
+                        "sequence_create_mutant_library",
+                        "sequence_annotate_with_grn",
+                    ],
+                    "export": [
+                        "sequence_save_sequences",
+                        "sequence_export_dataset",
+                        "sequence_export_entity",
+                    ],
+                    "loaders": ["sequence_download", "sequence_download_dataset", "sequence_register_records"],
+                },
+                "molecule": {
+                    "handles": "Small-molecule ligands",
+                    "list_load": [
+                        "list_ligand_entities",
+                        "load_ligand_entity",
+                        "load_ligand_dataset",
+                    ],
+                    "analysis": [
+                        "ligand_compute_interactions",
+                        "structure_analyze_ligand_interactions",
+                        "analyze_structure_ligand_environment",
+                        "ligand_calculate_molecular_properties",
+                    ],
+                    "export": [
+                        "ligand_register_smiles",
+                        "ligand_record_interactions",
+                    ],
+                    "loaders": ["extract_ligands_from_structure", "get_protein_ligands_from_chembl"],
+                },
+                "embedding": {
+                    "handles": "Sequence embeddings (ESM, ANKH, etc.)",
+                    "list_load": [
+                        "embedding_list_models",
+                        "embedding_load_dataset",
+                    ],
+                    "analysis": [
+                        "embedding_cosine_similarity",
+                    ],
+                    "export": [
+                        "embedding_generate",
+                    ],
+                    "loaders": [],
                 },
                 "grn": {
                     "handles": "Generic Residue Numbering tables",
-                    "key_methods": ["load_reference_table", "assign_grn", "save_grn_table"],
-                    "use_for": "Consistent residue numbering across protein families"
+                    "list_load": [
+                        "list_grn_tables",
+                        "load_grn_reference_table",
+                        "load_grn_table",
+                    ],
+                    "analysis": [
+                        "grn_annotate_sequences",
+                        "assign_grn_to_dataset",
+                        "get_grn_table_stats",
+                    ],
+                    "export": [
+                        "record_grn_table",
+                    ],
+                    "loaders": [],
                 },
                 "property": {
-                    "handles": "Experimental properties and metadata",
-                    "key_methods": ["assign_property", "save_property_table"],
-                    "use_for": "Binding affinity, expression levels, experimental conditions"
+                    "handles": "Tabular properties / annotations",
+                    "list_load": [
+                        "list_property_tables",
+                        "load_property_table",
+                        "load_property_rows",
+                    ],
+                    "analysis": [
+                        "get_property_statistics",
+                        "filter_entities_by_property",
+                    ],
+                    "export": [
+                        "create_property_table",
+                        "record_property_rows",
+                        "export_property_table",
+                    ],
+                    "loaders": [],
                 },
-                "ligand": {
-                    "handles": "Small molecule ligands",
-                    "key_methods": ["extract_ligands", "calculate_properties", "save_entity"],
-                    "use_for": "Drug discovery, binding site analysis, molecular properties"
-                },
-                "embedding": {
-                    "handles": "Machine learning embeddings",
-                    "key_methods": ["generate_embeddings", "save_embeddings"],
-                    "use_for": "ML-based analysis, similarity searches, clustering"
-                }
             },
-            "key_principle": "Each processor inherits from BaseProcessor and provides standardized methods for its data type"
+            "key_principle": "Use loader tools to download new data, then switch to list/load helpers for inspection and processor-native analysis tools for transformations."
         }
     
     def _get_data_management_guide(self) -> Dict:
@@ -235,6 +319,14 @@ class ProtoGuideTools(BaseTool):
                 "download": "External source → Processor → Entity Registry → Local storage",
                 "load": "Entity name → Processor → ProtosPaths → File data → Parsed object",
                 "save": "Data object → Processor → ProtosPaths → File storage → Registry update"
+            },
+            "packaged_datasets": {
+                "sequence": "register_gpcr_sequence_dataset",
+                "structure": "register_rhodopsin_structure_dataset",
+                "molecule": "register_chembl_ligand_dataset",
+                "property": "register_gpcr_property_dataset",
+                "graph": "register_rhodopsin_graph_dataset",
+                "description": "These helpers copy the embedded reference datasets into the current data root and register them with the appropriate processor."
             }
         }
     
@@ -261,8 +353,8 @@ class ProtoGuideTools(BaseTool):
                 }
             ],
             "operations": {
-                "list_entities": "See all entities for a processor type",
-                "search_entities": "Find entities across all processors",
+                "entity_list_entities": "See all entities for a processor type",
+                "entity_search_entities": "Find entities across all processors",
                 "entity_info": "Get comprehensive information about an entity"
             }
         }
@@ -275,25 +367,25 @@ class ProtoGuideTools(BaseTool):
                 "structure_based": {
                     "description": "Workflows starting from 3D structures",
                     "examples": [
-                        "Structure → Sequence extraction → Alignment",
-                        "Structure → Ligand extraction → Property calculation",
-                        "Multiple structures → Structural alignment → RMSD analysis"
+                        "structure_download_batch → load_structure_dataset → structure_filter_dataset → structure_collect_chain_sequences",
+                        "structure_align_to_reference → structure_apply_grn_annotations → structure_export_dataset",
+                        "extract_ligands_from_structure → ligand_compute_interactions → ligand_record_interactions",
                     ]
                 },
                 "sequence_based": {
                     "description": "Workflows starting from sequences",
                     "examples": [
-                        "Sequences → Alignment → Conservation analysis",
-                        "Sequences → GRN assignment → Family analysis",
-                        "Sequences → Clustering → Phylogeny"
+                        "sequence_download → load_sequence_dataset → sequence_align_to_reference",
+                        "sequence_align_mmseqs → sequence_compute_conservation → sequence_export_dataset",
+                        "sequence_annotate_with_grn → load_grn_table → structure_apply_grn_annotations",
                     ]
                 },
                 "integrated": {
                     "description": "Workflows combining multiple data types",
                     "examples": [
-                        "Structure + Sequence → GRN → Property mapping",
-                        "Structure + Ligand → Binding analysis → Drug design",
-                        "Multiple formats → Integrated dataset → ML analysis"
+                        "structure_collect_chain_sequences → sequence_save_sequences → embedding_generate → embedding_cosine_similarity",
+                        "structure_graph_generate_from_dataset → structure_graph_load_entity → property_record_table",
+                        "ligand_register_smiles → load_ligand_dataset → analyze_ligand_binding_site",
                     ]
                 }
             },
@@ -311,7 +403,7 @@ class ProtoGuideTools(BaseTool):
             "title": "Best Practices for Protos",
             "data_preparation": [
                 "Download all required entities before analysis",
-                "Verify entities exist with list_entities",
+                "Verify entities exist with entity_list_entities",
                 "Create datasets for related entities",
                 "Use consistent naming conventions"
             ],
@@ -324,7 +416,7 @@ class ProtoGuideTools(BaseTool):
             "common_patterns": {
                 "batch_download": {
                     "description": "Download multiple structures efficiently",
-                    "example": "download_dataset_entities('my_dataset', max_parallel=5)"
+                    "example": "structure_download_batch(['3sn6', '5d5a'], dataset_name='gpcr_structures')"
                 },
                 "cross_format": {
                     "description": "Link data across formats",
@@ -349,7 +441,7 @@ class ProtoGuideTools(BaseTool):
             {
                 "step": 1,
                 "action": "Check available entities",
-                "command": "list_entities(processor_type='structure')"
+                "command": "entity_list_entities(processor_type='structure')"
             },
             {
                 "step": 2,
@@ -477,13 +569,13 @@ class ProtoGuideTools(BaseTool):
             {
                 "step": 3,
                 "description": "Get binding site residues",
-                "tool": "get_binding_site_residues",
+                "tool": "structure_get_binding_site_residues",
                 "params": {"pdb_id": "4djh", "ligand_name": "0KE", "cutoff": 5.0}
             },
             {
                 "step": 4,
                 "description": "Calculate molecular properties",
-                "tool": "calculate_molecular_properties",
+                "tool": "ligand_calculate_molecular_properties",
                 "params": {"smiles": "CC1=CC=C(C=C1)C2=CC(=NN2C3=CC=C(C=C3)S(=O)(=O)N)C(F)(F)F"}
             },
             {
@@ -524,13 +616,13 @@ class ProtoGuideTools(BaseTool):
             {
                 "step": 4,
                 "description": "Find conserved regions",
-                "tool": "find_conserved_regions",
+                "tool": "sequence_find_conserved_regions",
                 "params": {"dataset_name": "kinase_sequences", "threshold": 0.9}
             },
             {
                 "step": 5,
                 "description": "Detect mutations",
-                "tool": "detect_mutations",
+                "tool": "sequence_detect_mutations",
                 "params": {"reference": "EGFR_HUMAN", "variant": "EGFR_L858R"}
             },
             {
@@ -714,7 +806,7 @@ class ProtoGuideTools(BaseTool):
             ],
             "usage_pattern": {
                 "initialization": "Processors are created automatically by MCP tools",
-                "data_access": "Use processor-specific methods like load_structures(), save_entity()",
+                "data_access": "Use processor-specific methods like load_structure(), save_entity()",
                 "no_direct_creation": "Never create processors directly in MCP tools"
             },
             "interoperability": "Processors can exchange data through the entity registry"

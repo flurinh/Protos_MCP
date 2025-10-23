@@ -15,13 +15,13 @@ if protos_path.exists() and str(protos_path) not in sys.path:
     sys.path.insert(0, str(protos_path))
 
 try:
-    from protos.core.base_processor import BaseProcessor
+    from protos.io.core import BaseProcessor
     from protos.processing.structure import StructureProcessor
     from protos.processing.sequence import SequenceProcessor
     from protos.processing.grn import GRNProcessor
     from protos.processing.property import PropertyProcessor
     from protos.processing.embedding import EmbeddingProcessor
-    from protos.processing.ligand import LigandProcessor
+    from protos.processing.molecule import MoleculeProcessor
     # Note: Graph processor may not exist, handle gracefully
     try:
         from protos.processing.graph import GraphProcessor
@@ -36,7 +36,7 @@ except ImportError as e:
     GRNProcessor = None
     PropertyProcessor = None
     EmbeddingProcessor = None
-    LigandProcessor = None
+    MoleculeProcessor = None
     GraphProcessor = None
 
 from ..core.exceptions import ProcessorNotFoundError, ProcessorInitializationError
@@ -59,16 +59,15 @@ class ProcessorFactory:
                 "grn": GRNProcessor,
                 "property": PropertyProcessor,
                 "embedding": EmbeddingProcessor,
-                "ligand": LigandProcessor
+                "molecule": MoleculeProcessor
             }
             # Add graph processor if available
             if GraphProcessor is not None:
                 cls._registry["graph"] = GraphProcessor
     
     @classmethod
-    def create(cls, 
-               processor_type: str, 
-               paths,  # ProtosPaths instance
+    def create(cls,
+               processor_type: str,
                config: Optional[Dict] = None) -> BaseProcessor:
         """
         Create processor with injected dependencies.
@@ -100,24 +99,16 @@ class ProcessorFactory:
             )
         
         try:
-            # Create processor with correct parameters
-            if processor_type == "embedding":
-                # EmbeddingProcessor doesn't take paths parameter
-                processor = processor_class(
-                    name=f"{processor_type}_processor"
-                )
-            else:
-                # All other processors take paths parameter
-                processor = processor_class(
-                    name=f"{processor_type}_processor",
-                    paths=paths
-                )
+            # Create processor with zero-config constructor
+            processor = processor_class(
+                name=f"{processor_type}_processor"
+            )
             
             # Apply any additional configuration
             if config:
                 for key, value in config.items():
                     # Skip properties that can't be set directly
-                    if processor_type == "embedding" and key == "model":
+                    if processor_type == "embedding" and key == "models":
                         continue
                     if hasattr(processor, key):
                         try:

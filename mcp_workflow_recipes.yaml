@@ -1,0 +1,252 @@
+orientation:
+  summary: |
+    Begin every session by skimming `MCP_ALIGNMENT_NOTES.md` for the repository overview and outstanding tasks,
+    then review the relevant `protos/test_*.py` script so you understand the scientific intent and expected
+    artifacts (datasets, tables, aligned structures). Maintain the zero-config contract: always interact through
+    processors and loaders provided by the MCP tools; never craft filesystem paths manually.
+  initial_steps:
+    - "Confirm the active Protos data root via the configuration/status tool."
+    - "List sequence and structure entities to validate that prerequisite datasets already exist."
+    - "If new raw data is required (structures, sequences, ligands), acquire it first with the appropriate loader tool before running analyses."
+
+workflows:
+  - script: protos/test_sequence_workflow.py
+    instructions: |
+      1. Register the demo sequences (local FASTA and UniProt accessions) so they can be reused across analyses.
+      2. Review the resulting dataset to confirm individual and multi-entry records look correct.
+      3. Compare representative sequences to validate the collection before diving deeper.
+      4. Build a small mutant library around a reference sequence and evaluate conservation/linkage across the variants.
+      5. Store both the full dataset and any single-sequence exports needed for downstream sharing.
+    tools:
+      - sequence_download
+      - sequence_dataset_stats
+      - load_sequence_dataset
+      - align_sequences_by_id
+      - sequence_create_mutant_library
+      - sequence_compute_conservation
+      - sequence_compute_linkage
+      - sequence_export_dataset
+      - sequence_export_entity
+
+  - script: protos/test_sequence_alignment.py
+    instructions: |
+      1. Assemble a small sequence dataset for benchmarking (local FASTA or in-memory records).
+      2. Produce a quick pairwise alignment to sanity-check sequence similarity.
+      3. Run a broader MMseqs comparison and archive the dataset for later inspection.
+    tools:
+      - sequence_save_sequences
+      - align_sequences_by_id
+      - sequence_align_mmseqs
+      - sequence_export_dataset
+
+  - script: protos/test_sequence_embedding.py
+    instructions: |
+      1. Verify the preferred embedding models are available in the environment.
+      2. Generate per-sequence and per-residue embeddings for the sample sequences.
+      3. Optionally discard model caches once the embeddings have been persisted.
+    tools:
+      - embedding_list_models
+      - embedding_generate
+      - embedding_clear_cache
+
+  - script: protos/test_sequence_real_workflow.py
+    instructions: |
+      1. Ensure the GPCR reference structures are available locally and grouped into a dataset.
+      2. Extract chain sequences from each structure and consolidate them into a reusable sequence dataset.
+      3. Compare the chains against a chosen reference (pairwise and MMseqs) to highlight GPCR-like examples.
+      4. Examine conservation/linkage metrics for the curated chains and optionally spin out focused mutant libraries.
+    tools:
+      - structure_download_batch
+      - structure_dataset_stats
+      - structure_register_chain_sequences_from_dataset
+      - structure_list_dataset_sequences
+      - extract_all_chains_from_dataset
+      - sequence_save_sequences
+      - sequence_dataset_stats
+      - sequence_align_to_reference
+      - sequence_align_mmseqs
+      - sequence_compute_conservation
+      - sequence_compute_linkage
+      - sequence_create_mutant_library
+
+  - script: protos/test_cross_processor_annotation.py
+    instructions: |
+      1. Confirm the GPCR structure dataset is populated and ready for analysis.
+      2. Inspect the structure → sequence relationships produced during chain registration.
+      3. Score each chain against the GPCR reference and separate high- from low-similarity candidates.
+      4. Attach the resulting classifications to the structure metadata for downstream querying.
+    tools:
+      - structure_download_batch
+      - structure_register_chain_sequences_from_dataset
+      - structure_list_dataset_sequences
+      - load_sequence_entity
+      - align_sequences_by_id
+      - structure_annotate_entities
+
+  - script: protos/test_structure_alignment.py
+    instructions: |
+      1. Ensure the target structure dataset is populated and (if necessary) filter out non-target structures or chains.
+      2. Align the remaining structures to the chosen reference, capturing transforms, RMSD summaries, and aligned copies.
+      3. Export the aligned structures so the updated coordinates can replace or supplement the originals.
+    tools:
+      - structure_download_batch
+      - structure_dataset_stats
+      - load_structure_dataset
+      - structure_align_to_reference
+      - structure_export_entity
+      - structure_export_dataset
+
+  - script: protos/test_structure_grn_annotation.py
+    instructions: |
+      1. Download/register the structures, then extract and collect chain sequences for GPCR candidate chains.
+      2. Align chains against the reference GPCR sequence and keep only high-confidence matches.
+      3. Save the curated chains as a sequence dataset, annotate it with the GPCR GRN reference, and persist the table.
+      4. Apply the GRN annotations back onto the source structures so residue-level numbering is accessible in future steps.
+    tools:
+      - structure_download_batch
+      - structure_register_chain_sequences_from_dataset
+      - structure_collect_chain_sequences
+      - align_sequences_by_id
+      - sequence_save_sequences
+      - sequence_annotate_with_grn
+      - structure_apply_grn_annotations
+
+  - script: water_network_analysis (extension of protos/test_structure_grn_annotation.py)
+    instructions: |
+      1. Reuse the GRN-annotated GPCR structures and confirm water molecules remain in the processed frames (no solvent stripping during ingestion/export).
+      2. For each structure, extract water molecules and nearby residues, recording residue–water and water–water contacts using the ligand analysis utilities.
+      3. Assemble in-memory water/residue networks, highlighting residue–water–residue chains and cross-chain bridges (GRNs surface automatically when the structures carry annotations).
+      4. Call `structure_compute_water_networks` with `property_table_name` to persist the summary metrics and, optionally, stash the raw graphs (`include_raw=true`) for deeper analysis. Use property tools to tag cohorts (antagonist vs inverse agonist) and compare their water-network signatures.
+    tools:
+      - structure_list_entities
+      - structure_load_entity
+      - structure_apply_grn_annotations
+      - structure_extract_water_molecules
+      - structure_compute_water_networks
+      - property_record_table
+
+  - script: protos/test_structure_embedding_similarity.py
+    instructions: |
+      1. Gather the structures, extract their chains, and curate the sequences needed for embedding.
+      2. Generate per-residue embeddings for the selected chains and align each structure to a common reference.
+      3. Compare the embeddings to summarise similarity across structures using `structure_compute_embedding_similarity` (returns per-structure stats, optional raw rows, and plot-friendly coordinates).
+      4. Persist the similarity property table (if requested) and aligned coordinates required downstream.
+    tools:
+      - structure_download_batch
+      - structure_dataset_stats
+      - structure_register_chain_sequences_from_dataset
+      - structure_collect_chain_sequences
+      - sequence_save_sequences
+      - embedding_list_models
+      - embedding_generate
+      - embedding_load_dataset
+      - structure_align_to_reference
+      - structure_export_dataset
+      - structure_compute_embedding_similarity
+      - property_record_table
+      - save_plotly_figure  # visualization tooling scheduled later
+
+  - script: protos/test_embedding_workflow.py
+    instructions: |
+      1. Review the embedding models that match the desired accuracy/runtime balance.
+      2. Load the structure-derived sequence dataset targeted for embedding.
+      3. Generate the requested embedding types and store them under reproducible dataset names.
+    tools:
+      - embedding_list_models
+      - load_sequence_dataset
+      - embedding_generate
+
+  - script: protos/test_graph_workflow.py
+    instructions: |
+      1. Confirm a structure dataset is present (create one if necessary) and identify the structures to graph.
+      2. Generate atom-level graphs for the dataset, storing the resulting graph dataset/entity references.
+      3. Load individual graphs to verify node/edge counts or to feed downstream tooling.
+    tools:
+      - structure_download_batch
+      - structure_create_dataset
+      - structure_graph_generate_from_dataset
+      - structure_graph_load_entity
+
+  - script: protos/test_dataset_registration.py
+    instructions: |
+      1. Use the high-level dataset registration helpers (GPCR sequences, rhodopsin structures, ligand/property/graph datasets) to bootstrap curated collections.
+      2. Verify each helper produced the expected dataset and entity membership.
+    tools:
+      - register_gpcr_sequence_dataset
+      - register_rhodopsin_structure_dataset
+      - register_chembl_ligand_dataset
+      - register_gpcr_property_dataset
+      - register_rhodopsin_graph_dataset
+      - list_datasets
+      - dataset_entities
+
+  - script: protos/test_ligand_workflow.py
+    instructions: |
+      1. Seed the ligand registry with the demonstration SMILES set used in the script.
+      2. Extract ligands from a sample structure and quantify their interactions with the protein.
+      3. Persist the contact table so later workflows can reason about binding environments.
+    tools:
+      - ligand_register_smiles
+      - structure_list_entities
+      - extract_ligands_from_structure
+      - ligand_compute_interactions
+      - structure_analyze_ligand_interactions
+      - ligand_record_interactions
+
+  - script: protos/test_property_workflow.py
+    instructions: |
+      1. Load the sequence dataset targeted for scoring and compare each chain to the chosen reference.
+      2. Record the resulting scores in a property table and confirm representative entries are accessible for downstream tasks.
+    tools:
+      - load_sequence_dataset
+      - align_sequences_by_id
+      - calculate_sequence_identity
+      - record_property_rows
+      - load_property_rows
+
+  - script: protos/test_grn_workflow.py
+    instructions: |
+      1. Register or load the GPCR sequence dataset and confirm the reference sequence is available.
+      2. Classify sequences by similarity to the reference (best-match helper pending MCP exposure).
+      3. Annotate the dataset with the GPCR GRN reference and inspect the stored table/entities.
+    tools:
+      - sequence_save_sequences
+      - sequence_find_best_match  # planned wrapper (mmseqs + biopython fallback)
+      - sequence_annotate_with_grn
+      - load_grn_reference_table
+      - grn_dataset_info
+      - grn_load_entity
+
+  - script: protos/test_grn_structure_visualization.py
+    instructions: |
+      1. Load the GRN-annotated structures (or annotate them first) and identify the chains with coverage.
+      2. Align the annotated structures to a reference so their coordinates are comparable.
+      3. Prepare GRN-tagged coordinates for visualization (interactive plotting remains a manual step for now).
+    tools:
+      - structure_list_entities
+      - structure_load_entity
+      - structure_align_to_reference
+      - grn_list_annotated_chains  # planned helper to report chain coverage
+      - save_plotly_figure  # planned visualization export helper
+
+  - script: protos/test_model_manager_workflows.py
+    instructions: |
+      1. Assemble the prerequisite datasets for each GPCR target (sequences, GRN annotations, embeddings, structures).
+      2. Configure ModelManager inputs for structure prediction and mutation screening scenarios (wrappers pending MCP exposure).
+      3. Combine structure, ligand, and property outputs to stage interface and binder design explorations.
+      4. Record any generated properties or metadata so the results remain accessible for later review.
+    tools:
+      - sequence_save_sequences
+      - structure_download_batch
+      - structure_collect_chain_sequences
+      - sequence_annotate_with_grn
+      - embedding_generate
+      - property_record_table
+      - model_prepare_input  # planned wrapper
+      - model_prepare_batch  # planned wrapper
+      - model_prepare_mutation_screen  # planned wrapper
+
+notes:
+  - "Replace placeholders (e.g., <candidate_chain_ids>, <property_rows>) with concrete values gathered during the session."
+  - "When a workflow cites a future tool, either script the action directly in Python or prioritise adding the missing MCP wrapper."
+  - "Always verify saved artifacts (datasets, tables, exports) with the appropriate load/list tool before proceeding to dependent steps."

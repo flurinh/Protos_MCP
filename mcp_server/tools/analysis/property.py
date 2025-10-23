@@ -1,11 +1,4 @@
-"""
-Property analysis tools for working with property tables.
-
-These tools provide analysis capabilities for property tables where:
-- Each row is an entity (indexed by entity_id)
-- Each column is a property
-- Each table is a dataset
-"""
+"""Property table data and analysis tools backed by PropertyProcessor."""
 
 from typing import Dict, List, Optional, Any, Union, Callable
 import pandas as pd
@@ -22,9 +15,75 @@ class PropertyAnalysisTools(BaseTool):
         """Register property analysis tools with the server."""
         
         @server.tool()
-        def create_property_table(ctx, dataset_name: str,
-                                data: Union[Dict[str, Dict[str, Any]], List[Dict[str, Any]]],
-                                metadata: Optional[Dict] = None) -> Dict:
+        def list_property_tables(ctx) -> Dict:
+            """List all property tables registered with Protos."""
+
+            processor = self.get_processor("property")
+            tables = processor.list_tables()
+            return self.format_success({
+                "tables": tables,
+                "count": len(tables),
+            })
+
+        @server.tool()
+        def load_property_table(ctx, table_name: str, limit: Optional[int] = None) -> Dict:
+            """Load a property table as JSON for inspection."""
+
+            if error := self.validate_required_params(
+                {"table_name": table_name}, ["table_name"],
+            ):
+                return error
+
+            processor = self.get_processor("property")
+            try:
+                table = processor.load_table(table_name)
+            except FileNotFoundError:
+                return self.format_error(
+                    f"Property table '{table_name}' not found",
+                    "Use list_property_tables to see available tables.",
+                )
+
+            payload = {
+                "table_name": table_name,
+                "row_count": int(len(table)),
+                "columns": table.columns.tolist(),
+                "data": table.head(limit).to_dict(orient="records") if limit else table.to_dict(orient="records"),
+                "truncated": bool(limit and len(table) > limit),
+            }
+            return self.format_success(payload)
+
+        @server.tool()
+        def save_property_table(
+            ctx,
+            table_name: str,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict:
+            """Persist property table metadata and ensure dataset registration is updated."""
+
+            if error := self.validate_required_params(
+                {"table_name": table_name}, ["table_name"],
+            ):
+                return error
+
+            processor = self.get_processor("property")
+            try:
+                processor.save_property_table(table_name, metadata=metadata)
+            except FileNotFoundError:
+                return self.format_error(
+                    f"Property table '{table_name}' not found",
+                    "Create the table first before attempting to save metadata.",
+                )
+
+            info = processor.dataset_manager.get_dataset_info(table_name)
+            return self.format_success(info, message="Property table saved")
+
+        @server.tool()
+        def create_property_table(
+            ctx,
+            dataset_name: str,
+            data: Union[Dict[str, Dict[str, Any]], List[Dict[str, Any]]],
+            metadata: Optional[Dict] = None,
+        ) -> Dict:
             """
             Create a new property table from entity data.
             
@@ -80,9 +139,80 @@ class PropertyAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def add_property_column(ctx, dataset_name: str,
-                              property_name: str,
-                              values: Union[Dict[str, Any], Any]) -> Dict:
+        def record_property_rows(
+            ctx,
+            dataset_name: str,
+            rows: Union[List[Dict[str, Any]], Dict[str, Any]],
+            metadata: Optional[Dict[str, Any]] = None,
+            allow_create: bool = False,
+        ) -> Dict:
+            """Append rows to a property table using `record_properties`."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name, "rows": rows}, ["dataset_name", "rows"],
+            ):
+                return error
+
+            processor = self.get_processor("property")
+
+            if isinstance(rows, dict):
+                row_payload = [rows]
+            else:
+                row_payload = rows
+
+            updated = processor.record_properties(
+                dataset_name,
+                row_payload,
+                metadata=metadata,
+                allow_create=allow_create,
+            )
+
+            return self.format_success(
+                {
+                    "dataset_name": dataset_name,
+                    "row_count": int(len(updated)),
+                    "columns": updated.columns.tolist(),
+                },
+                message="Property rows recorded",
+            )
+
+        @server.tool()
+        def load_property_rows(
+            ctx,
+            dataset_name: str,
+            entity_name: Optional[str] = None,
+            scope_format: Optional[str] = None,
+        ) -> Dict:
+            """Load property rows, optionally filtered by entity scope."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name}, ["dataset_name"],
+            ):
+                return error
+
+            processor = self.get_processor("property")
+            table = processor.load_dataset_rows(
+                table_name=dataset_name,
+                entity_name=entity_name,
+                format_type=scope_format,
+            )
+
+            return self.format_success(
+                {
+                    "dataset_name": dataset_name,
+                    "row_count": int(len(table)),
+                    "columns": table.columns.tolist(),
+                    "data": table.to_dict(orient="records"),
+                }
+            )
+
+        @server.tool()
+        def add_property_column(
+            ctx,
+            dataset_name: str,
+            property_name: str,
+            values: Union[Dict[str, Any], Any],
+        ) -> Dict:
             """
             Add a new property column to an existing property table.
             
@@ -315,9 +445,12 @@ class PropertyAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def merge_property_tables(ctx, dataset_names: List[str],
-                                output_name: str,
-                                how: str = "outer") -> Dict:
+        def merge_property_tables(
+            ctx,
+            dataset_names: List[str],
+            output_name: str,
+            how: str = "outer",
+        ) -> Dict:
             """
             Merge multiple property tables into one.
             
@@ -349,27 +482,56 @@ class PropertyAnalysisTools(BaseTool):
                         "Valid methods: outer, inner, left, right"
                     )
                 
-                # Get property processor
                 processor = self.get_processor("property")
-                
-                # Perform merge
-                try:
-                    merged_df = processor.merge_property_tables(
-                        dataset_names=dataset_names,
-                        output_name=output_name,
-                        how=how
+
+                tables: List[pd.DataFrame] = []
+                for name in dataset_names:
+                    try:
+                        tables.append(processor.load_table(name))
+                    except FileNotFoundError:
+                        return self.format_error(
+                            f"Property table '{name}' not found",
+                            "Ensure all source tables exist before merging.",
+                        )
+
+                if not tables:
+                    return self.format_error(
+                        "No property tables loaded",
+                        "Verify dataset names are correct.",
                     )
-                except ValueError as e:
-                    return self.format_error(str(e))
-                
-                return self.format_success({
-                    "output_name": output_name,
-                    "merged_from": dataset_names,
-                    "merge_method": how,
-                    "entities": len(merged_df),
-                    "properties": merged_df.columns.tolist(),
-                    "shape": list(merged_df.shape)
-                })
+
+                merged_df = tables[0]
+                for table in tables[1:]:
+                    merged_df = merged_df.merge(
+                        table,
+                        left_index=True,
+                        right_index=True,
+                        how=how,
+                        suffixes=("", "_dup"),
+                    )
+
+                # Remove duplicate suffix columns if any
+                duplicate_cols = [col for col in merged_df.columns if col.endswith("_dup")]
+                if duplicate_cols:
+                    merged_df = merged_df.drop(columns=duplicate_cols)
+
+                processor.create_property_table(
+                    table_name=output_name,
+                    data=merged_df,
+                    metadata={"merged_from": dataset_names, "merge_method": how},
+                    allow_create=True,
+                )
+
+                return self.format_success(
+                    {
+                        "output_name": output_name,
+                        "merged_from": dataset_names,
+                        "merge_method": how,
+                        "entities": int(len(merged_df)),
+                        "properties": merged_df.columns.tolist(),
+                        "shape": list(merged_df.shape),
+                    }
+                )
                 
             except Exception as e:
                 return self.handle_error(e)

@@ -1,0 +1,652 @@
+version: 1
+notes: Curated benchmark scenarios for Protos MCP agents grouped by difficulty. References
+  follow repo-relative paths with optional line hints.
+categories:
+  easy:
+  - id: E01
+    title: Sequence Workflow Warmup
+    reference: protos/test_sequence_workflow.py:1
+    capability: SequenceProcessor ingestion
+    description: Load the demo FASTA files, register them through SequenceLoader,
+      and confirm the new dataset and entity show up in the registry before exporting
+      the dataset back to disk as FASTA and reporting the output paths.
+  - id: E02
+    title: Pairwise Alignment Preview
+    reference: protos/test_sequence_alignment.py:1
+    capability: Sequence alignment
+    description: Given two demo sequences, run the SequenceProcessor alignment utilities
+      to compute the similarity score and show the first few alignment rows so an
+      analyst can judge whether the sequences plausibly match.
+  - id: E03
+    title: Mutant Library Conservation Snapshot
+    reference: protos/test_sequence_workflow.py:1
+    capability: Sequence analytics
+    description: Construct the small mutant library from the example workflow, compute
+      the conservation statistics, and print the leading positions with consensus
+      data so downstream tools can see which residues stayed stable.
+  - id: E04
+    title: Structure Data Root Bootstrapping
+    reference: protos/test_structure_alignment.py:1
+    capability: StructureProcessor setup
+    description: Initialize StructureProcessor so that the data root and required
+      subdirectories exist, then echo the resolved paths to prove the structure workspace
+      was prepared correctly.
+  - id: E05
+    title: Structure Cache Availability Check
+    reference: protos/test_structure_alignment.py:1
+    capability: Structure dataset introspection
+    description: Inspect the GPCR structure dataset membership and note which PDB
+      IDs are already cached locally, flagging any missing files so an agent knows
+      whether downloads are required before alignment.
+  - id: E06
+    title: Load Structure Entity
+    reference: protos/test_structure_alignment.py:1
+    capability: Structure entity IO
+    description: Load one of the cached structures into a dataframe, report the chain
+      identifiers and number of residues, and confirm that the returned frame contains
+      coordinate columns.
+  - id: E07
+    title: Loader Coverage Summary
+    reference: protos/examples/test_loader_functionality.py:1
+    capability: Loader diagnostics
+    description: Query the CCD and QM9 loaders for their known datasets, list which
+      caches exist, and highlight any missing prerequisite archives so tool invocations
+      can be planned.
+  - id: E08
+    title: Database Download Ledger
+    reference: protos/examples/test_database_status.py:1
+    capability: Dataset bookkeeping
+    description: Produce a concise table of database names, download flags, and storage
+      locations to help an agent decide whether further downloads or syncs are necessary.
+  - id: E09
+    title: Format Configuration Validation
+    reference: protos/examples/test_format_validation.py:1
+    capability: Format validation
+    description: Run the format validation helper on the bundled sample inputs and
+      surface any schema mismatches or missing fields so ingest steps can be corrected
+      quickly.
+  - id: E10
+    title: CIF Export Default Verification
+    reference: protos/examples/test_cif_default.py:1
+    capability: Ligand conversion default
+    description: Request a ligand export without specifying a format, verify that
+      the exporter chose CIF, and describe where the file was written for later inspection.
+  - id: E11
+    title: Gzipped CCD Sanity Check
+    reference: protos/examples/test_gemmi_gz.py:1
+    capability: Compressed structure IO
+    description: Open the gzipped CCD archive through Gemmi, stream a handful of lines,
+      and confirm that the compressed file can be read without an intermediate extraction
+      step.
+  - id: E12
+    title: Enamine Credential Probe
+    reference: protos/examples/ligand/test_enamine_credentials.py:1
+    capability: Secrets configuration
+    description: Load the Enamine credentials from environment or .env, report whether
+      the username and password were found, and warn if authentication details are
+      missing.
+  - id: E13
+    title: SDF Handling Smoke Test
+    reference: protos/examples/ligand/test_sdf_handling.py:1
+    capability: LigandProcessor SDF ingest
+    description: Parse the bundled sample SDF file with LigandProcessor, enumerate
+      molecules with their atom counts, and point to any malformed records that need
+      manual fixes.
+  - id: E14
+    title: QM9 Quick Dataset Sampler
+    reference: protos/examples/ligand/test_qm9_quick.py:1
+    capability: Small molecule loader
+    description: Load the lightweight QM9 sample, list a few molecule identifiers
+      with SMILES and property snippets, and note the directory that now hosts the
+      extracted data.
+  - id: E15
+    title: CCD Ligand Registration Mini-Run
+    reference: protos/examples/ligand/test_ligand_processor.py:1
+    capability: Ligand dataset registration
+    description: Use LigandProcessor to register a couple of CCD ligands, verify they
+      appear in the registry, and show which local paths were materialized.
+  - id: E16
+    title: Embedding Processor Quickstart
+    reference: protos/examples/embedding_example.py:1
+    capability: EmbeddingProcessor basics
+    description: Instantiate EmbeddingProcessor, run embeddings for the provided toy
+      sequences (skipping gracefully if dependencies are missing), and describe the
+      tensor shapes that come back.
+  - id: E17
+    title: Structure Graph Snapshot
+    reference: protos/test_graph_workflow.py:1
+    capability: GraphProcessor basics
+    description: Generate the default residue interaction graph for the demo structures,
+      capture node and edge counts, and indicate where the graph dataset was stored.
+  - id: E18
+    title: Sequence Subset Export
+    reference: protos/test_sequence_workflow.py:1
+    capability: Sequence dataset export
+    description: Take an existing sequence dataset, export just one identifier to
+      its own FASTA file, and confirm the relative path so follow-on tasks can reference
+      the subset.
+  - id: E19
+    title: Model Format Round Trip
+    reference: protos/examples/test_simple_model_integration.py:1
+    capability: Model format handshake
+    description: Use the simple models-format utilities to convert a mock sequence
+      representation into another supported format and verify that the converted payload
+      keeps the original identifiers intact.
+  - id: E20
+    title: CCD Parsing Primer
+    reference: protos/examples/ccd/test_ccd_parsing.py:1
+    capability: CCD schema familiarization
+    description: Stream the first chunk of the CCD archive, annotate the key headers
+      that appear, and summarise how component blocks are organised for later scripted
+      extraction.
+  - id: E21
+    title: CCD Record Field Inspection
+    reference: protos/examples/ccd/test_ccd_format.py:1
+    capability: CCD field mapping
+    description: Inspect one component entry, mapping field names to their meaning,
+      and record where SMILES, formula, and component type are stored for downstream
+      parsing.
+  - id: E22
+    title: SDF Format Walkthrough
+    reference: protos/examples/ligand/sdf_format_explanation.py:1
+    capability: Ligand file education
+    description: Print the SDF structure explanation, then parse the sample atom line
+      to show how coordinates and element codes are encoded in fixed-width columns.
+  - id: E23
+    title: Locate ATP Block in CCD
+    reference: protos/examples/ligand/test_find_atp.py:1
+    capability: CCD component search
+    description: Scan the CCD CIF archive until you hit the data_ATP block, report
+      the starting line, and dump a short excerpt so chemists can verify the raw record.
+  - id: E24
+    title: CCD Cache Audit
+    reference: protos/examples/ccd/check_ccd_pickle.py:1
+    capability: Ligand cache validation
+    description: Open the cached CCD pickle, confirm the total ligand count, and spot-check
+      a handful of entries to ensure names and SMILES strings were persisted.
+  - id: E25
+    title: CCD ATP Block Debugging
+    reference: protos/examples/molecules/debug_atp_parsing.py:1
+    capability: CCD block debugging
+    description: Isolate the ATP component from the CCD archive, list the chem_comp
+      fields, and highlight how the SMILES line is represented so parsers can be tuned.
+  - id: E26
+    title: CCD Component Loader Probe
+    reference: protos/examples/ccd/debug_ccd_component.py:1
+    capability: CCD cache inspection
+    description: Use the unified CCD loader to fetch ATP from the cache, enumerate
+      the keys returned, and surface any missing descriptors that would block downstream
+      tools.
+  - id: E27
+    title: QM9 Loader Readiness
+    reference: protos/examples/ligand/test_qm9_loader.py:1
+    capability: QM9 dataset handling
+    description: Check whether the QM9 archive is present, run the status helper without
+      triggering a download, and report how many XYZ files (if any) are already on
+      disk.
+  - id: E28
+    title: Structure Schema Peek
+    reference: protos/examples/structure_schema_example.py:1
+    capability: Structure schema inspection
+    description: Resolve the file path for a sample PDB ID, attempt to load it with
+      the structured schema helper, and summarise how many atoms, chains, and residues
+      were observed.
+  - id: E29
+    title: ProtosPaths Directory Survey
+    reference: protos/src/protos/io/paths/path_config.py:1
+    capability: Path configuration
+    description: Instantiate ProtosPaths with the default settings, list the important
+      processor directories (input, cache, datasets), and explain which environment
+      variables influence each location.
+  - id: E30
+    title: Ligand Database Status Snapshot
+    reference: protos/examples/test_ligand_databases.py:1
+    capability: Ligand database status
+    description: Call get_database_statistics to display the availability of CCD,
+      QM9, and Enamine resources, indicating which ones are downloaded and where they
+      live.
+  - id: E31
+    title: GRN Reference Sequence Peek
+    reference: protos/examples/grn_sequence_example.py:1
+    capability: GRN reference access
+    description: Load the microbial opsin GRN table, extract a couple of reference
+      sequences, and print the first few GRN-labelled positions so agents learn the
+      table layout.
+  - id: E32
+    title: Data Root Locator
+    reference: protos/examples/data_management_example.py:1
+    capability: Workspace discovery
+    description: Create or reuse the Protos data root described in the example, echo
+      the resolved path, and list any pre-existing datasets so later workflows know
+      what storage is available.
+  - id: E33
+    title: Entity Registry Snapshot
+    reference: protos/src/protos/io/data_access/entity_registry.py:1
+    capability: Registry inspection
+    description: Open the global entity registry, list the first few registered entity
+      IDs with their format types, and highlight how to tell whether a structure or
+      sequence is already catalogued.
+  medium:
+  - id: M01
+    title: Real-World GPCR Sequence Workflow
+    reference: protos/test_sequence_real_workflow.py:1
+    capability: Sequence ingestion and remote fetch
+    description: Follow the real-data workflow to register demo FASTA files, attempt
+      the UniProt pull (handling the failure path if offline), and document how many
+      GPCR sequences were ultimately registered.
+  - id: M02
+    title: Mutant Library Linkage Analysis
+    reference: protos/test_sequence_workflow.py:1
+    capability: Sequence analytics advanced
+    description: Build the small mutant library and compute both conservation and
+      mutual-information linkage tables, summarising the top interacting residue pairs
+      for downstream analysis.
+  - id: M03
+    title: Batch Alignment Scoring
+    reference: protos/test_sequence_alignment.py:1
+    capability: Alignment engine stress test
+    description: Run the batch alignment routine over several sequence pairs, capture
+      the normalised alignment scores, and point out which comparisons exceed the
+      similarity threshold.
+  - id: M04
+    title: Multi-Model Sequence Embeddings
+    reference: protos/test_sequence_embedding.py:1
+    capability: EmbeddingProcessor breadth
+    description: Generate embeddings with at least two models and multiple pooling
+      strategies, skipping gracefully when models are unavailable, and list the tensor
+      shapes for each sequence.
+  - id: M05
+    title: GPCR Structure Alignment
+    reference: protos/test_structure_alignment.py:1
+    capability: Structure alignment pipeline
+    description: Align the demo GPCR structures with CEAlign, report global RMSD statistics,
+      and mention any structures that could not be aligned due to missing data.
+  - id: M06
+    title: Export Aligned Structures Metadata
+    reference: protos/test_structure_alignment.py:83
+    capability: Structure export management
+    description: After performing alignment, export the transformed structures, annotate
+      the metadata with alignment provenance, and note where the aligned CIF files
+      were saved.
+  - id: M07
+    title: Structure Embedding Similarity Map
+    reference: protos/test_structure_embedding_similarity.py:1
+    capability: Structure embedding analytics
+    description: Compute per-residue embedding similarities across the aligned structures,
+      identify the residues with highest and lowest agreement, and summarise the resulting
+      score distribution.
+  - id: M08
+    title: Structure GRN Annotation Workflow
+    reference: protos/test_structure_grn_annotation.py:1
+    capability: Structure to GRN mapping
+    description: Ensure the GPCR structures are downloaded, run StructureProcessor.assign_grns,
+      and report how many residues per structure received GRN labels.
+  - id: M09
+    title: Sequence GRN Registration
+    reference: protos/test_grn_workflow.py:1
+    capability: Sequence to GRN pipeline
+    description: Register the GPCR sequences, classify them by similarity to the reference,
+      execute annotate_with_grn, and capture the per-sequence coverage summary.
+  - id: M10
+    title: GRN Configuration Utilities
+    reference: protos/examples/test_grn_config.py:1
+    capability: GRN interval helpers
+    description: Exercise the GRN configuration helpers to load configuration intervals,
+      sort GRN strings, and demonstrate how to pull the allowed range for a helix.
+  - id: M11
+    title: Stepwise GRN-Structure Integration
+    reference: protos/examples/test_grn_struct_step_by_step.py:1
+    capability: Incremental GRN mapping
+    description: Walk through the step-by-step GRN workflow, moving from sequence
+      extraction to structure mapping, and record the intermediate tables so the integration
+      path is clear.
+  - id: M12
+    title: Ligand Workflow Demonstration
+    reference: protos/examples/ligand/test_ligand_workflow.py:1
+    capability: Ligand ingest and reporting
+    description: Execute the end-to-end ligand workflow that loads CCD and QM9 samples,
+      performs enrichment steps, and emits a small report of ligand properties.
+  - id: M13
+    title: Controlled Ligand Download
+    reference: protos/examples/ligand/test_ligand_download.py:1
+    capability: Remote ingest management
+    description: Trigger a targeted ligand download while respecting cache flags,
+      summarise which components were fetched, and show the resulting storage paths.
+  - id: M14
+    title: Enamine Small Dataset Processing
+    reference: protos/examples/ligand/test_enamine_small.py:1
+    capability: Credentialed dataset pull
+    description: Authenticate with Enamine, download the diversity_1k slice if credentials
+      allow, and list how many compounds were registered locally.
+  - id: M15
+    title: Mixed Entity Property Scoring
+    reference: protos/test_property_workflow.py:1
+    capability: PropertyProcessor advanced
+    description: Run the property workflow across sequences and structures, export
+      the resulting tables, and call out any missing properties that the processor
+      could not compute.
+  - id: M16
+    title: Structure Graph Construction with Metadata
+    reference: protos/test_graph_workflow.py:1
+    capability: GraphProcessor advanced
+    description: Create the structure interaction graph, attach metadata such as residue
+      annotations, and record the dataset name for the graph so future steps can reuse
+      it.
+  - id: M17
+    title: ModelManager Workflow Suite
+    reference: protos/test_model_manager_workflows.py:1
+    capability: Model routing
+    description: Exercise the ModelManager test suite to prepare models inputs, capture
+      the generated configuration files, and highlight which processor inputs were
+      consumed.
+  - id: M18
+    title: Processor Model Integration
+    reference: protos/examples/test_processor_model_integration.py:1
+    capability: Cross-format adapters
+    description: Wire together sequence and structure processors with the models format
+      adapters, confirming that conversion between internal schemas succeeds for the
+      demo data.
+  - id: M19
+    title: CCD Unified Loader Run
+    reference: protos/examples/ccd/test_ccd_unified_loader.py:1
+    capability: CCD data wrangling
+    description: Execute the unified CCD loader to extract, normalise, and register
+      a small set of components, summarising any failures encountered along the way.
+  - id: M20
+    title: Loader Extraction Workflow
+    reference: protos/examples/test_loader_with_extraction.py:1
+    capability: Loader plus filesystem orchestration
+    description: Run the loader extraction workflow that unpacks archives into the
+      expected directory structure, verifying that the dataset manifest reflects the
+      new files.
+  - id: M21
+    title: Data Management Walkthrough
+    reference: protos/examples/data_management_example.py:1
+    capability: Dataset lifecycle management
+    description: Follow the data management script to register downloaded structures,
+      ingest manual files, and generate a dataset manifest summarising the resulting
+      entities.
+  - id: M22
+    title: GRN Table Loading Methods
+    reference: protos/examples/grn_load_sequences_example.py:1
+    capability: GRN table access
+    description: Demonstrate both GRN table loading approaches (tables directory and
+      ref directory) and export a compact list of sequence IDs retrieved by each method.
+  - id: M23
+    title: Basic GRN Annotation
+    reference: protos/examples/grn_basic_annotation.py:1
+    capability: GRNProcessor setup
+    description: Run the basic microbial opsin annotation example end to end, documenting
+      how many sequences were annotated successfully and where the resulting GRN table
+      lives.
+  - id: M24
+    title: GRN Sequence Prep
+    reference: protos/examples/grn_sequence_example.py:1
+    capability: GRN sequence extraction
+    description: Load the GRN table, extract the reference sequences with GRNProcessor.get_seq_dict,
+      and highlight a few GRN-labelled positions for a representative sequence.
+  - id: M25
+    title: QM9 Loader Check
+    reference: protos/examples/ligand/test_qm9_loader.py:1
+    capability: QM9 dataset handling
+    description: Run the QM9 loader helpers to ensure the dataset is downloaded and
+      extracted, then fetch a couple of molecules to prove the metadata is accessible.
+  - id: M26
+    title: SMILES Parsing Debug
+    reference: protos/examples/molecules/debug_smiles_parsing.py:1
+    capability: CCD parsing diagnostics
+    description: Use the CCD parsing helper to inspect how ATP's SMILES line is interpreted,
+      showing both the parsed output and any raw lines that needed special handling.
+  - id: M27
+    title: Ligand Processor CCD Dataset
+    reference: protos/examples/ligand/test_ligand_processor_ccd.py:1
+    capability: Ligand to structure linkage
+    description: Create a small CCD-based ligand dataset, verify its registry entry,
+      and list the component IDs along with any associated property metadata.
+  - id: M28
+    title: Gemmi Extraction Working Check
+    reference: protos/examples/test_gemmi_extraction_working.py:1
+    capability: Gemmi validation
+    description: Run the working Gemmi extraction script to confirm SMILES descriptors
+      can be pulled from the CCD blocks, noting any components that still fail.
+  - id: M29
+    title: CifBase GRN Methods
+    reference: protos/examples/test_cifbase_grn_methods.py:1
+    capability: CifBaseProcessor GRN
+    description: Exercise get_seq_dict, get_grn_dict, and assign_grns on the synthetic
+      dataset, reporting the sequences returned and how missing residues are represented.
+  - id: M30
+    title: MMseqs Dense Alignment Converter
+    reference: protos/examples/mmseqs.py:1
+    capability: MMseqs post-processing
+    description: Convert an MMseqs alignment output into a dense Biopython-style alignment,
+      printing the aligned sequences and midline for inspection.
+  - id: M31
+    title: MMseqs Alignment Formatter
+    reference: protos/examples/mmseqs_alignment.py:1
+    capability: Alignment normalisation
+    description: Take the coordinate-level alignment data, rebuild the formatted alignment
+      blocks with start and end indices, and confirm the alignment metadata is consistent.
+  - id: M32
+    title: Database Integration Dry Run
+    reference: protos/examples/test_database_integration.py:1
+    capability: Dataset orchestration
+    description: Execute the integration script just far enough to verify database
+      connectivity and report which datasets were detected without performing heavy
+      downloads.
+  - id: M33
+    title: Gemmi Descriptor Debugger
+    reference: protos/examples/test_gemmi_debug.py:1
+    capability: Gemmi troubleshooting
+    description: Run the Gemmi debug helper to identify descriptor extraction failures,
+      logging the component IDs that require manual intervention.
+  hard:
+  - id: H01
+    title: GPCR Crystallization Planner
+    reference: projects/crystallization:4
+    capability: Cross-processor experiment planning
+    description: Starting from the crystallization problem statement, design a workflow
+      that scores LCP-plate conditions for a new GPCR by combining sequence, structure,
+      and property analyses, and produce a ranked shortlist with rationale.
+  - id: H02
+    title: Opsin Pocket Dynamics Study
+    reference: projects/francisco:1
+    capability: Structure geometry with GRN analytics
+    description: Compute cavity volumes around the retinal binding site, map entry
+      and exit GRNs, and report how pocket flexibility correlates with residue properties
+      for the opsin family.
+  - id: H03
+    title: Retinal Selectivity Energy Mapping
+    reference: projects/deborah.md:1
+    capability: Property plus structure plus GRN fusion
+    description: Compare inactive and active opsin states, estimate energy differences
+      using the available processors, and relate changes in rigidity to the observed
+      quantum yields summarized in the brief.
+  - id: H04
+    title: Water Network Density Benchmark
+    reference: projects/gebhard.md:1
+    capability: Structure refinement and property stats
+    description: Implement the backbone-deform and water-refinement loop, then rank
+      waters by refined B-factors to highlight the densest hydration sites in the
+      GPCR pocket.
+  - id: H05
+    title: Multi-State Opsin GRN Comparison
+    reference: projects/lea.md:1
+    capability: Multi-structure alignment with GRN mapping
+    description: Align opn5, cone, and bistable opsin structures, annotate them with
+      GRNs, and document how key positions shift between active and inactive states.
+  - id: H06
+    title: Agonist versus Inverse Agonist Analysis
+    reference: projects/valerie.md:1
+    capability: Integrated multi-dataset analysis
+    description: Execute the study comparing GRN-level interactions for agonist and
+      inverse-agonist GPCR complexes, summarising hydrogen-bond differences per GRN
+      position.
+  - id: H07
+    title: Valerie Pipeline Execution
+    reference: projects/valerie.py:30
+    capability: Sequence, structure, and GRN orchestration
+    description: Run the scripted pipeline that prepares datasets, downloads structures,
+      annotates GRNs, and produces the analysis report, capturing successes and failures.
+  - id: H08
+    title: GRN Approach Benchmarking
+    reference: projects/valerie.py:162
+    capability: Tool-mode parity validation
+    description: Compare CLI, direct-code, and structure-based GRN annotations on
+      the same dataset, highlighting discrepancies and suggesting which approach should
+      back MCP tools.
+  - id: H09
+    title: Dataset Registry Curation
+    reference: projects/valerie.py:115
+    capability: Dataset management and persistence
+    description: Audit the GPCR datasets created by the Valerie workflow, update the
+      datasets.json manifest, and document how re-runs should handle overwrite flags.
+  - id: H10
+    title: Cross-Processor Annotation Chain
+    reference: protos/test_cross_processor_annotation.py:1
+    capability: Sequence-structure-GRN workflow
+    description: Follow the cross-processor example to classify GPCR chains, annotate
+      structures, and show how sequence and structure processors coordinate during
+      MCP requests.
+  - id: H11
+    title: Scaled Structure GRN Mapping
+    reference: protos/test_structure_grn_annotation.py:1
+    capability: Large-set GRN annotation
+    description: Scale up structure GRN mapping across several GPCR entries, reporting
+      coverage statistics and any chains that could not be annotated.
+  - id: H12
+    title: Robust GPCR Classification
+    reference: protos/test_grn_workflow.py:78
+    capability: Resilient GRN pipeline
+    description: Use both MMseqs and fallback alignments to classify GPCR sequences,
+      highlighting how the workflow copes with missing reference hits.
+  - id: H13
+    title: GPCR Ensemble Alignment & Versioning
+    reference: protos/test_structure_alignment.py:39
+    capability: Alignment plus dataset versioning
+    description: Perform ensemble alignments, version the aligned structures instead
+      of overwriting originals, and document the metadata linking versions to their
+      sources.
+  - id: H14
+    title: GRN-Aware Embedding Correlation
+    reference: protos/test_structure_embedding_similarity.py:1
+    capability: Embedding and GRN fusion
+    description: Correlate embedding similarity scores with GRN-labelled residues
+      to find conserved hotspots across aligned receptors.
+  - id: H15
+    title: Multi-Source Ligand Integration
+    reference: protos/examples/ligand/test_ligand_integration.py:1
+    capability: Ligand multi-source ingest
+    description: Combine CCD, QM9, and Enamine ligands into a unified dataset, resolving
+      credential constraints and noting how conflicts are handled.
+  - id: H16
+    title: Ligand-Structure Linkage Audit
+    reference: protos/examples/ligand/test_ligand_processor_ccd.py:1
+    capability: Ligand to structure linkage
+    description: Audit the CCD dataset to ensure each ligand links back to the correct
+      structure entities, flagging any missing cross-references.
+  - id: H17
+    title: CCD Graph and Property Overlay
+    reference: protos/examples/ccd/test_ccd_updated.py:1
+    capability: CCD to graph/property cascade
+    description: Transform CCD entries into graphs, overlay property annotations,
+      and describe how the combined dataset can be reused by MCP tools.
+  - id: H18
+    title: Docker Backend Fallback
+    reference: protos/examples/test_docker_backend.py:1
+    capability: External runtime integration
+    description: Run the Docker backend example to ensure models can be executed in
+      a containerised environment when local runtimes are unavailable.
+  - id: H19
+    title: Processor Update Regression Sweep
+    reference: protos/examples/test_processor_updates.py:1
+    capability: Cross-processor regression
+    description: Execute the processor update regression script, capturing which directories
+      and tables were touched, so the MCP suite retains compatibility with recent
+      changes.
+  - id: H20
+    title: Multi-Database Integration Audit
+    reference: protos/examples/test_database_integration.py:1
+    capability: Dataset orchestration dashboard
+    description: Carry the database integration script through its full checks, documenting
+      CCD, QM9, and Enamine states, and calling out missing downloads or misconfigured
+      paths.
+  - id: H21
+    title: Build Gemmi CCD Index
+    reference: protos/examples/ccd/build_ccd_index.py:1
+    capability: CCD indexing
+    description: Rebuild the CCD index with Gemmi, timing the operation and summarising
+      the size of the generated index and pickle files.
+  - id: H22
+    title: Fix CCD Performance
+    reference: protos/examples/fix_ccd_performance.py:1
+    capability: CCD index optimisation
+    description: Profile slow CCD lookups, rebuild the index with the performance
+      fix, and compare timings before and after the change.
+  - id: H23
+    title: Opsin Property Dataset Forge
+    reference: protos/examples/create_opsin_property_dataset.py:1
+    capability: PropertyProcessor with sequences
+    description: Generate synthetic opsin property records tied to reference sequences,
+      register the dataset, and describe how the properties map back to sequence IDs.
+  - id: H24
+    title: Advanced GRN Workflow
+    reference: protos/examples/grn_advanced_workflow.py:1
+    capability: GRN multi-phase annotation
+    description: "Run the five-phase GRN assignment workflow, tracking each phase\u2019\
+      s outputs and noting which sequences required manual follow-up."
+  - id: H25
+    title: GRN Embedding Integration
+    reference: protos/examples/grn_embedding_integration.py:1
+    capability: Embedding plus GRN fusion
+    description: Map residue embeddings onto GRN assignments and structural context,
+      producing a joined table suitable for feature engineering.
+  - id: H26
+    title: Gemmi CCD Extraction Audit
+    reference: protos/examples/test_gemmi_ccd_extraction.py:1
+    capability: Gemmi CCD parsing
+    description: Slice the CCD archive, extract descriptors with Gemmi, and catalogue
+      which descriptor types (e.g., smiles, InChI) are available for target ligands.
+  - id: H27
+    title: Model Docker Usage
+    reference: protos/examples/model_docker_usage.py:1
+    capability: External models runtime
+    description: Prepare and launch a models inference job through the Docker backend,
+      ensuring command construction and volume mounts align with expectations.
+  - id: H28
+    title: Model Manager Playbook
+    reference: protos/examples/model_manager_example.py:1
+    capability: ModelManager orchestration
+    description: Use the ModelManager example to prepare single-sequence and mutation
+      screen inputs, documenting configs and resulting command lines for Boltz-2 and
+      RFdiffusion.
+  - id: H29
+    title: Property Processor Demo
+    reference: protos/examples/property_processor_demo.py:1
+    capability: Property dataset management
+    description: Assign multiple property types across structure, sequence, and GRN
+      entities, then summarise dataset statistics and property distributions.
+  - id: H30
+    title: Property Integration Test
+    reference: protos/examples/property_processor_integration_test.py:1
+    capability: PropertyProcessor integration
+    description: Link real structure and sequence entities to property tables, prove
+      that lookups resolve correctly, and highlight any metadata mismatches.
+  - id: H31
+    title: Property Real-World Demo
+    reference: protos/examples/property_real_world_demo.py:1
+    capability: Property analytics
+    description: Apply property scoring to realistic entities, filter for interesting
+      subsets, and outline how the results could be surfaced in MCP responses.
+  - id: H32
+    title: Rebuild CCD from Scratch
+    reference: protos/examples/rebuild_ccd_from_scratch.py:1
+    capability: CCD dataset reconstruction
+    description: Run the full CCD rebuild pipeline, ensuring SMILES extraction works,
+      and summarise the size and location of the regenerated cache.
+  - id: H33
+    title: Visualize GPCR GRNs
+    reference: protos/examples/visualize_gpcr_grn.py:1
+    capability: GRN visual analytics
+    description: Produce the interactive GPCR GRN visualisation, capturing screenshots
+      or saved HTML, and describe how the visual cues align with GRN numbering.

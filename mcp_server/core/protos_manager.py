@@ -41,6 +41,8 @@ class ProtosManager:
             ProcessorNotFoundError: If processor type is unknown
         """
         # Check context cache first
+        self.context.ensure_protos_ready()
+
         if processor := self.context.get_processor(processor_type):
             return processor
         
@@ -65,7 +67,6 @@ class ProtosManager:
         # Create processor with factory
         processor = ProcessorFactory.create(
             processor_type=processor_type,
-            paths=self.context.paths,
             config=processor_config
         )
         
@@ -104,7 +105,8 @@ class ProtosManager:
     
     def ensure_directories(self):
         """Ensure all required directories exist."""
-        self.context.paths.ensure_directories()
+        # Reinitialize without wiping to create any missing layout pieces
+        self.context.paths.reinitialize(wipe=False, reinstall_reference=False)
     
     def get_available_processors(self) -> list:
         """Get list of available processor types."""

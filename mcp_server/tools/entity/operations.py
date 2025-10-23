@@ -12,25 +12,33 @@ from pathlib import Path
 
 from ..base import BaseTool
 from ...core.exceptions import EntityNotFoundError, InvalidInputError
+from ..loader import SequenceLoaderTools, StructureLoaderTools
 
 
 class EntityOperationTools(BaseTool):
     """Tools for entity CRUD operations."""
-    
+
+    def __init__(self, context):
+        super().__init__(context)
+        self._sequence_loader = SequenceLoaderTools(context)
+        self._structure_loader = StructureLoaderTools(context)
+
     def register(self, server):
         """Register entity operation tools with the server."""
-        
+
         @server.tool()
-        def download_entity(ctx, entity_id: str,
-                          source: str = "pdb",
-                          processor_type: str = "structure",
-                          overwrite: bool = False) -> Dict:
+        def download_entity(
+            ctx,
+            entity_id: str,
+            processor_type: str = "structure",
+            source: Optional[str] = None,
+            overwrite: bool = False,
+        ) -> Dict:
             """
             Download an entity from an external source.
             
             Args:
                 entity_id: ID of entity to download (e.g., PDB ID)
-                source: Source to download from (pdb, uniprot, etc.)
                 processor_type: Type of processor to use
                 overwrite: Whether to overwrite existing entity
                 
@@ -44,14 +52,14 @@ class EntityOperationTools(BaseTool):
                     ["entity_id"]
                 ):
                     return error
-                
+
                 # Validate processor type
                 if error := self.validate_processor_type(processor_type):
                     return error
-                
+
                 # Get processor
                 processor = self.get_processor(processor_type)
-                
+
                 # Check if already exists
                 if not overwrite and hasattr(processor, 'entity_exists'):
                     if processor.entity_exists(entity_id):
@@ -59,103 +67,36 @@ class EntityOperationTools(BaseTool):
                             f"Entity '{entity_id}' already exists",
                             "Use overwrite=true to replace existing entity"
                         )
-                
-                # Download based on processor type and source
-                if processor_type == "structure" and source == "pdb":
-                    # Import download function
-                    try:
-                        from protos.loaders.download_structures import download_structures_with_processor
-                        success, failed = download_structures_with_processor(
-                            [entity_id], 
-                            processor=processor,
-                            overwrite=overwrite
+                try:
+                    if processor_type == "sequence":
+                        result = self._sequence_loader.sequence_download(
+                            ctx,
+                            identifier=entity_id,
+                            name=entity_id,
+                            materialize_entities=True,
+                            metadata=None,
                         )
-                        
-                        if entity_id in failed:
-                            return self.format_error(
-                                f"Failed to download {entity_id}: {failed[entity_id]}",
-                                "Check that the ID is valid and the source is accessible"
-                            )
-                        
-                        return self.format_success({
-                            "entity_id": entity_id,
-                            "source": source,
-                            "processor_type": processor_type,
-                            "status": "downloaded"
-                        })
-                        
-                    except ImportError:
-                        return self.format_error(
-                            "Download functionality not available",
-                            "Ensure protos.loaders module is installed"
+                        return result
+
+                    if processor_type == "structure":
+                        result = self._structure_loader.structure_download(
+                            ctx,
+                            identifier=entity_id,
+                            name=entity_id,
+                            source=source,
+                            overwrite=overwrite,
                         )
-                        
-                elif processor_type == "sequence" and source == "uniprot":
-                    # Download from UniProt
-                    try:
-                        from protos.loaders.uniprot_loader import download_sequence
-                        
-                        # Download sequence
-                        sequence = download_sequence(entity_id)
-                        if sequence:
-                            # Save using processor
-                            processor.save_sequence(entity_id, sequence)
-                            
-                            return self.format_success({
-                                "entity_id": entity_id,
-                                "source": source,
-                                "processor_type": processor_type,
-                                "status": "downloaded",
-                                "sequence_length": len(sequence)
-                            })
-                        else:
-                            return self.format_error(
-                                f"Failed to download sequence {entity_id}",
-                                "Check that the UniProt ID is valid"
-                            )
-                    except ImportError:
-                        return self.format_error(
-                            "UniProt download functionality not available",
-                            "Ensure protos.loaders.uniprot_loader is available"
-                        )
-                        
-                elif processor_type == "structure" and source == "alphafold":
-                    # Download from AlphaFold
-                    try:
-                        from protos.loaders.alphafold_utils import download_alphafold_structures
-                        
-                        # Let Protos handle the download and path management internally
-                        success = download_alphafold_structures(
-                            [entity_id],
-                            output_dir=None  # Let the function use default Protos paths
-                        )
-                        
-                        if success:
-                            return self.format_success({
-                                "entity_id": entity_id,
-                                "source": source,
-                                "processor_type": processor_type,
-                                "status": "downloaded"
-                            })
-                        else:
-                            return self.format_error(
-                                f"Failed to download from AlphaFold: {entity_id}",
-                                "Check that the UniProt ID has an AlphaFold structure"
-                            )
-                    except ImportError:
-                        return self.format_error(
-                            "AlphaFold download functionality not available",
-                            "Ensure protos.loaders.alphafold_utils is available"
-                        )
-                        
-                else:
+                        return result
+
                     return self.format_error(
-                        f"Download not implemented for {processor_type} from {source}",
-                        "Supported: structure from pdb/alphafold, sequence from uniprot"
+                        f"Download not implemented for processor '{processor_type}'",
+                        "Currently supported: sequence, structure.",
                     )
-                    
-            except Exception as e:
-                return self.handle_error(e)
+                except Exception as exc:
+                    return self.handle_error(exc)
+
+            except Exception as exc:
+                return self.handle_error(exc)
         
         @server.tool()
         def load_entity(ctx, name: str, format: str,
@@ -189,16 +130,13 @@ class EntityOperationTools(BaseTool):
                 # Load entity based on processor type
                 try:
                     if format == "structure":
-                        # For structure processor, load single structure
-                        processor.load_structures([name])
-                        if hasattr(processor, 'data') and processor.data is not None:
-                            # Filter to just this structure
-                            data = processor.data[processor.data['pdb_id'] == name]
-                        else:
+                        frame = processor.load_entity(name)
+                        if frame is None:
                             return self.format_error(
                                 f"Failed to load structure {name}",
-                                "Structure may not exist. Try downloading it first."
+                                "Structure may not exist. Try downloading it first.",
                             )
+                        data = frame.reset_index()
                     elif format == "property":
                         # For properties, get all properties for the entity
                         if hasattr(processor, 'get_entity_properties'):
@@ -447,7 +385,7 @@ class EntityOperationTools(BaseTool):
                             "Check property format and try again"
                         )
                         
-                elif format == "ligand":
+                elif format == "molecule":
                     # For ligands, expect ligand-specific data
                     try:
                         parsed_data = json.loads(data) if isinstance(data, str) else data

@@ -1,14 +1,16 @@
 """
-Ligand analysis tools leveraging Protos' LigandProcessor.
+Ligand analysis tools leveraging Protos' MoleculeProcessor.
 
 These tools provide comprehensive ligand analysis capabilities including
 molecular property calculation, similarity search, drug-likeness filtering,
 ChEMBL integration, and structure-ligand analysis.
 """
 
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Sequence
 import json
 import logging
+
+import pandas as pd
 
 from ..base import BaseTool
 from ...core.exceptions import InvalidInputError, EntityNotFoundError
@@ -23,7 +25,7 @@ class LigandAnalysisTools(BaseTool):
         """Register ligand analysis tools with the server."""
         
         @server.tool()
-        def calculate_molecular_properties(ctx, smiles: str) -> Dict:
+        def ligand_calculate_molecular_properties(ctx, smiles: str) -> Dict:
             """
             Calculate molecular properties for a SMILES string.
             
@@ -50,7 +52,7 @@ class LigandAnalysisTools(BaseTool):
                     return error
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
+                processor = self.get_processor("molecule")
                 
                 # Calculate properties
                 properties = processor.calculate_properties(smiles)
@@ -102,11 +104,17 @@ class LigandAnalysisTools(BaseTool):
                     )
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
-                
+                processor = self.get_processor("molecule")
+
+                if not hasattr(processor, "search_similar_ligands"):
+                    return self.format_error(
+                        "MoleculeProcessor does not expose similarity search",
+                        "Port the legacy similarity utilities or provide a fingerprint backend."
+                    )
+
                 # Search for similar ligands
                 results = processor.search_similar_ligands(
-                    query_smiles, 
+                    query_smiles,
                     similarity=similarity_threshold,
                     dataset=dataset
                 )
@@ -162,7 +170,7 @@ class LigandAnalysisTools(BaseTool):
                     )
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
+                processor = self.get_processor("molecule")
                 
                 # Filter drug-like ligands
                 drug_like = processor.filter_drug_like(entity_names, strict=strict)
@@ -210,15 +218,14 @@ class LigandAnalysisTools(BaseTool):
                     activity_types = ['IC50', 'Ki', 'Kd', 'EC50']
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
-                
-                # Check if ChEMBL loader is available
-                if not hasattr(processor, 'chembl_loader') or processor.chembl_loader is None:
+                processor = self.get_processor("molecule")
+
+                if not hasattr(processor, "get_protein_ligands"):
                     return self.format_error(
-                        "ChEMBL integration not available",
-                        "Ensure ChEMBL loader is installed and configured"
+                        "ChemBL integration not available",
+                        "The MoleculeProcessor transition removed direct ChEMBL loaders."
                     )
-                
+
                 # Get ligands from ChEMBL
                 ligands = processor.get_protein_ligands(
                     protein_id,
@@ -249,6 +256,177 @@ class LigandAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
+
+        @server.tool()
+        @server.tool()
+        def list_ligand_entities(ctx, limit: Optional[int] = None, offset: int = 0) -> Dict:
+            """List registered ligand entities with optional pagination."""
+
+            try:
+                processor = self.get_processor("molecule")
+                entities = processor.list_ligands()
+                total = len(entities)
+                start = max(offset, 0)
+                end = start + limit if limit else total
+                sliced = entities[start:end]
+
+                return self.format_success(
+                    {
+                        "total": total,
+                        "offset": start,
+                        "count": len(sliced),
+                        "entities": sliced,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def load_ligand_entity(
+            ctx,
+            ligand_id: str,
+            include_structure: bool = False,
+        ) -> Dict:
+            """Load a ligand entity and preview its metadata."""
+
+            if error := self.validate_required_params(
+                {"ligand_id": ligand_id}, ["ligand_id"]
+            ):
+                return error
+
+            processor = self.get_processor("molecule")
+
+            try:
+                payload = processor.load_entity(ligand_id)
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            if payload is None:
+                return self.format_error(
+                    f"Ligand '{ligand_id}' not found",
+                    "Use ligand_register_smiles or other loaders to add ligands first.",
+                )
+
+            response: Dict[str, Any] = {
+                "ligand_id": ligand_id,
+                "kind": payload.get("kind"),
+                "metadata": payload.get("metadata", {}),
+            }
+
+            if "smiles" in payload:
+                response["smiles"] = payload["smiles"]
+
+            if include_structure and "structure" in payload:
+                response["structure"] = payload["structure"]
+
+            return self.format_success(response)
+
+        @server.tool()
+        def load_ligand_dataset(
+            ctx,
+            dataset_name: str,
+            include_entities: bool = False,
+            preview_count: int = 25,
+        ) -> Dict:
+            """Summarize a ligand dataset and optionally preview member entities."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name}, ["dataset_name"],
+            ):
+                return error
+
+            processor = self.get_processor("molecule")
+            manager = getattr(processor, "dataset_manager", None)
+            if manager is None or not manager.dataset_exists(dataset_name):
+                return self.format_error(
+                    f"Ligand dataset '{dataset_name}' not found",
+                    "Use dataset.list_datasets to confirm available ligand datasets.",
+                )
+
+            info = manager.get_dataset_info(dataset_name) or {}
+            entities = manager.get_dataset_entities(dataset_name)
+
+            payload: Dict[str, Any] = {
+                "dataset_name": dataset_name,
+                "entity_count": len(entities),
+                "metadata": info.get("metadata", {}),
+                "entities": entities[: min(preview_count, len(entities))],
+                "truncated": len(entities) > preview_count,
+            }
+
+            if include_entities and payload["entities"]:
+                previews: List[Dict[str, Any]] = []
+                for name in payload["entities"]:
+                    ligand = processor.load_entity(name) or {}
+                    previews.append(
+                        {
+                            "ligand_id": name,
+                            "kind": ligand.get("kind"),
+                            "smiles": ligand.get("smiles"),
+                            "metadata": ligand.get("metadata", {}),
+                        }
+                    )
+                payload["entity_previews"] = previews
+
+            return self.format_success(payload)
+
+        @server.tool()
+        def ligand_dataset_stats(
+            ctx,
+            dataset_name: str,
+            include_entities: bool = False,
+        ) -> Dict:
+            """Summarize a ligand dataset (entity count, metadata)."""
+
+            result = load_ligand_dataset(
+                ctx,
+                dataset_name=dataset_name,
+                include_entities=include_entities,
+            )
+
+            # load_ligand_dataset already returns a success/error dict.
+            return result
+
+        @server.tool()
+        def ligand_register_smiles(
+            ctx,
+            smiles_map: Dict[str, str],
+            dataset_name: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict:
+            """Register SMILES records as ligand entities and persist a dataset."""
+
+            if error := self.validate_required_params(
+                {"smiles_map": smiles_map}, ["smiles_map"],
+            ):
+                return error
+
+            if not smiles_map:
+                return self.format_error(
+                    "No SMILES records supplied",
+                    "Provide a mapping of identifier -> SMILES string",
+                )
+
+            processor = self.get_processor("molecule")
+
+            try:
+                dataset_id, entity_names = processor.register_smiles_dataset(
+                    smiles_map,
+                    dataset_name=dataset_name,
+                    metadata=metadata,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            return self.format_success(
+                {
+                    "dataset_name": dataset_id,
+                    "entity_count": len(entity_names),
+                    "entities": entity_names[: min(25, len(entity_names))],
+                    "truncated": len(entity_names) > 25,
+                },
+                message="Ligand dataset registered",
+            )
         
         @server.tool()
         def find_ligand_in_structures(ctx, ligand_code: str) -> Dict:
@@ -279,7 +457,7 @@ class LigandAnalysisTools(BaseTool):
                 ligand_code = ligand_code.upper()
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
+                processor = self.get_processor("molecule")
                 
                 # Find structures with this ligand
                 pdb_ids = processor.find_ligand_in_structures(ligand_code)
@@ -289,9 +467,64 @@ class LigandAnalysisTools(BaseTool):
                     "num_structures": len(pdb_ids),
                     "pdb_ids": pdb_ids[:100]  # Limit to first 100
                 })
-                
+
             except Exception as e:
                 return self.handle_error(e)
+
+        @server.tool()
+        def ligand_compute_interactions(
+            ctx,
+            structure_id: str,
+            ligand_names: Optional[Sequence[str]] = None,
+            distance_cutoff: float = 4.0,
+            preview_rows: int = 25,
+        ) -> Dict:
+            """Compute ligand-protein contacts for a structure."""
+
+            if error := self.validate_required_params(
+                {"structure_id": structure_id}, ["structure_id"],
+            ):
+                return error
+
+            processor = self.get_processor("molecule")
+
+            try:
+                df = processor.compute_interactions(
+                    structure_id,
+                    ligands=ligand_names,
+                    distance_cutoff=distance_cutoff,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            if df.empty:
+                return self.format_success(
+                    {
+                        "structure_id": structure_id,
+                        "ligand_names": list(ligand_names or []),
+                        "distance_cutoff": distance_cutoff,
+                        "interaction_count": 0,
+                        "interactions": [],
+                    },
+                    message="No ligand-protein contacts detected",
+                )
+
+            records = df.to_dict(orient="records")
+            unique_ligands = sorted(set(df["ligand_descriptor"].astype(str)))
+
+            return self.format_success(
+                {
+                    "structure_id": structure_id,
+                    "ligand_names": list(ligand_names or []),
+                    "distance_cutoff": distance_cutoff,
+                    "interaction_count": int(len(df)),
+                    "unique_ligands": unique_ligands,
+                    "columns": list(df.columns),
+                    "interactions": records[: min(preview_rows, len(records))],
+                    "truncated": len(records) > preview_rows,
+                    "dataframe": records,
+                }
+            )
         
         @server.tool()
         def create_ligand_dataset_from_chembl(ctx, protein_id: str,
@@ -324,7 +557,7 @@ class LigandAnalysisTools(BaseTool):
                     return error
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
+                processor = self.get_processor("molecule")
                 
                 # Get ligands from ChEMBL
                 ligands = processor.get_protein_ligands(
@@ -401,9 +634,60 @@ class LigandAnalysisTools(BaseTool):
                     
             except Exception as e:
                 return self.handle_error(e)
-        
+
         @server.tool()
-        def smiles_to_inchi(ctx, smiles: str) -> Dict:
+        def ligand_record_interactions(
+            ctx,
+            table_name: str,
+            interactions: List[Dict[str, Any]],
+            metadata: Optional[Dict[str, Any]] = None,
+            allow_create: bool = True,
+        ) -> Dict:
+            """Record ligand interaction rows into a property table."""
+
+            if error := self.validate_required_params(
+                {"table_name": table_name, "interactions": interactions},
+                ["table_name", "interactions"],
+            ):
+                return error
+
+            if not interactions:
+                return self.format_error(
+                    "Empty interaction payload",
+                    "Provide at least one interaction row from ligand_compute_interactions",
+                )
+
+            try:
+                df = pd.DataFrame(interactions)
+            except Exception as exc:  # noqa: BLE001
+                return self.format_error(
+                    "Failed to construct interaction table",
+                    f"Ensure rows share consistent keys: {exc}",
+                )
+
+            processor = self.get_processor("molecule")
+
+            try:
+                recorded = processor.record_interactions(
+                    table_name,
+                    df,
+                    metadata=metadata,
+                    allow_create=allow_create,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            return self.format_success(
+                {
+                    "table_name": table_name,
+                    "row_count": int(len(recorded)),
+                    "columns": recorded.columns.tolist(),
+                },
+                message="Ligand interactions recorded",
+            )
+
+        @server.tool()
+        def ligand_smiles_to_inchi(ctx, smiles: str) -> Dict:
             """
             Convert SMILES to InChI and InChI Key.
             
@@ -422,7 +706,7 @@ class LigandAnalysisTools(BaseTool):
                     return error
                 
                 # Get ligand processor
-                processor = self.get_processor("ligand")
+                processor = self.get_processor("molecule")
                 
                 # Import utility function
                 from protos.loaders.ligand_utils import smiles_to_inchi

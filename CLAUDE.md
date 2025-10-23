@@ -61,7 +61,13 @@ processor.save_cif(df, output_path)  # For CIF format
 processor.save_entity(name: str, data: Union[str, Dict[str, str]])
 processor.save_sequences(sequences: Dict[str, str], output_file: str)
 processor.save_alignment(alignment_data: Dict, output_file: str)
+processor.export_dataset(dataset_name: str, export_name: Optional[str] = None)
+processor.export_entity(name: str, export_name: Optional[str] = None)
 ```
+
+- Exports always land in the managed `sequence/fasta/datasets` or
+  `sequence/fasta/entities` directories and return metadata (including
+  `artifact_path`). Never accept raw filesystem paths.
 
 ### GRNProcessor
 ```python
@@ -104,10 +110,12 @@ processor.save_entity(name: str, data: Dict, metadata: Optional[Dict] = None)
 - Phase 5: Workflow Recreation
 
 ### New Tools Added
-- **download_dataset_entities**: Downloads all entities referenced in a dataset
-  - Supports parallel downloads for performance
-  - Works with PDB, AlphaFold, and UniProt sources
-  - Updates dataset metadata with download results
+- **sequence_download / sequence_register_records**: Fetch or register sequences via `SequenceLoader` (local FASTA, UniProt) with automatic entity registration.
+- **sequence_create_mutant_library / sequence_compute_conservation / sequence_compute_linkage**: Generate combinatorial variant sets and perform downstream analytics directly from MCP.
+- **structure_download / structure_download_batch**: Retrieve structures from RCSB/AlphaFold/local files through `StructureLoader`, with optional dataset creation.
+- **embedding_list_models / embedding_generate**: Inspect available embedding backends and persist embeddings for sequence datasets.
+- **sequence_annotate_with_grn**: Run the end-to-end GRN annotation workflow against registered sequence datasets and persist GRN tables.
+- **structure_apply_grn_annotations**: Project GRN tables back onto structure residues for the annotated chains.
 
 - **Property Analysis Tools**:
   - `create_property_table`: Create property tables from entity data
@@ -265,12 +273,12 @@ processor = StructureProcessor(
 )
 
 # Common methods
-data = processor.load_data("dataset_id", file_format="csv")
-processor.save_data("results", data=processed_data, file_format="json")
-dataset = processor.create_standard_dataset(
-    dataset_id="std_dataset",
-    name="Standard Dataset",
-    content=["item1", "item2"]
+data = processor.load_entity("dataset_id")
+processor.save_entity("results", processed_data)
+processor.dataset_manager.create_dataset(
+    name="std_dataset",
+    entities=["item1", "item2"],
+    metadata={"description": "Standard dataset"}
 )
 ```
 
@@ -302,8 +310,10 @@ protos/                    # Core library
 └── data/               # Auto-managed data directory
 
 mcp_server/              # MCP integration
-├── tools/              # MCP tool implementations
-└── server.py           # Server base class
+├── runtime.py          # Shared FastMCP lifespan + tool registration
+├── context.py          # ServerContext wiring and processor cache
+├── core/               # Processor factories, exceptions
+└── tools/              # MCP tool implementations (analysis, dataset, entity, guide)
 
 data/                   # User data (auto-created)
 ├── entity_registry.json
@@ -335,12 +345,11 @@ from protos.processors import StructureProcessor
 processor = StructureProcessor(name="my_processor")  # Auto-handles paths
 
 # Dataset operations pattern
-dataset = processor.create_standard_dataset(
-    dataset_id="my_dataset",
-    name="My Dataset",
-    content=["id1", "id2", "id3"]
+processor.dataset_manager.create_dataset(
+    name="my_dataset",
+    entities=["id1", "id2", "id3"],
 )
-results = processor.process_dataset(dataset)
+results = processor.load_dataset("my_dataset")
 
 # MCP tool processor validation pattern
 from mcp_server.core.processor_factory import ProcessorFactory
@@ -354,7 +363,7 @@ When adding new MCP tools:
 1. Add tool definition to `mcp_server/tools/`
 2. Follow stateless function pattern with clear input/output
 3. Use standardized error messages for LLM consumption
-4. Update server.py to register the new tool
+4. Add the tool class to `default_tools()` in `mcp_server/runtime.py`
 5. Always validate processor types using ProcessorFactory
 
 ### Testing Strategy

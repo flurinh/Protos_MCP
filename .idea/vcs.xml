@@ -3,5 +3,12 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/protos" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/GraphscoreDTA" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/LigandMPNN" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/Pocket2Mol" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/PocketDTA" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/Uni-Dock" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/bioemu" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/protos/src/protos/models/lambda" vcs="Git" />
   </component>
 </project>

@@ -45,7 +45,7 @@ class EntityNotFoundError(ProtosMCPError):
         
         super().__init__(
             message,
-            "Use 'list_entities' to see available entities or 'download_entity' to fetch from external sources"
+            "Use 'entity_list_entities' to see available entities or 'download_entity' to fetch from external sources"
         )
 
 

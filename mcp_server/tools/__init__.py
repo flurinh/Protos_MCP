@@ -1,7 +1,5 @@
-"""
-MCP tools for Protos functionality.
-"""
+"""Shared exports for MCP tools."""
 
 from .base import BaseTool
 
-__all__ = ['BaseTool']
+__all__ = ["BaseTool"]

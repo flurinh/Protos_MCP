@@ -6,20 +6,711 @@ sequence extraction, chain analysis, coordinate extraction, and ligand analysis.
 """
 
 from typing import Dict, List, Optional, Any, Union, Tuple
+from functools import reduce
 from datetime import datetime
+from pathlib import Path
+import math
 import pandas as pd
 import numpy as np
 
 from ..base import BaseTool
 from ...core.exceptions import InvalidInputError, EntityNotFoundError
+from protos.analysis.structure_water_networks import summarize_water_networks
+from protos.analysis.structure_embedding_similarity import (
+    ChainSelection,
+    compute_structure_embedding_similarity,
+)
 
 
 class StructureAnalysisTools(BaseTool):
     """Tools for structure analysis and manipulation."""
     
+    def _ensure_structures_loaded(self, processor, structure_ids: Union[str, List[str]]) -> None:
+        """Load structures via the processor's load_entity API."""
+
+        if isinstance(structure_ids, str):
+            structure_ids = [structure_ids]
+        for structure_id in structure_ids:
+            processor.load_entity(structure_id)
+
     def register(self, server):
         """Register structure analysis tools with the server."""
-        
+
+        @server.tool()
+        def list_structure_entities(ctx, limit: Optional[int] = None, offset: int = 0) -> Dict:
+            """List registered structure entities with optional pagination."""
+
+            try:
+                processor = self.get_processor("structure")
+                entities = processor.list_entities()
+                total = len(entities)
+                start = max(offset, 0)
+                end = start + limit if limit else total
+                sliced = entities[start:end]
+
+                return self.format_success(
+                    {
+                        "total": total,
+                        "offset": start,
+                        "count": len(sliced),
+                        "entities": sliced,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def load_structure(
+            ctx,
+            structure_id: str,
+            include_atoms: bool = False,
+            max_atoms: int = 2000,
+        ) -> Dict:
+            """Load a structure entity and return summary details."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"structure_id": structure_id},
+                    ["structure_id"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                df = processor.load_entity(structure_id)
+                if df is None:
+                    return self.format_error(
+                        f"Structure '{structure_id}' not found",
+                        "Use structure_download or structure_download_batch first.",
+                    )
+
+                reset = df.reset_index()
+                atom_count = len(reset)
+                chains = (
+                    reset["auth_chain_id"].value_counts(dropna=True).to_dict()
+                    if "auth_chain_id" in reset
+                    else {}
+                )
+
+                payload: Dict[str, Any] = {
+                    "structure_id": structure_id,
+                    "atom_count": atom_count,
+                    "columns": list(reset.columns),
+                    "chains": chains,
+                }
+
+                if include_atoms:
+                    preview = reset.head(max_atoms)
+                    payload["preview_rows"] = preview.to_dict(orient="records")
+                    payload["preview_count"] = len(preview)
+                    payload["truncated"] = atom_count > len(preview)
+
+                return self.format_success(payload)
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def load_structure_dataset(
+            ctx,
+            dataset_name: str,
+            include_entities: bool = False,
+            include_summaries: bool = False,
+            max_entities: int = 50,
+        ) -> Dict:
+            """Load a structure dataset and summarize its members."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name},
+                    ["dataset_name"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                manager = processor.dataset_manager
+                if not manager.dataset_exists(dataset_name):
+                    return self.format_error(
+                        f"Structure dataset '{dataset_name}' not found",
+                        "Use dataset.list_datasets or structure_download_batch to populate it.",
+                    )
+
+                entities = manager.get_dataset_entities(dataset_name)
+                info = manager.get_dataset_info(dataset_name)
+
+                payload: Dict[str, Any] = {
+                    "dataset_name": dataset_name,
+                    "entity_count": len(entities),
+                    "metadata": info.get("metadata", {}),
+                }
+
+                if include_entities:
+                    payload["entities"] = entities[:max_entities]
+                    payload["truncated"] = len(entities) > len(payload["entities"])
+
+                if include_summaries:
+                    dataset = processor.load_dataset(dataset_name, return_format="dict")
+                    summaries: List[Dict[str, Any]] = []
+                    for structure_id, frame in list(dataset.items())[:max_entities]:
+                        reset = frame.reset_index()
+                        summaries.append(
+                            {
+                                "structure_id": structure_id,
+                                "atom_count": len(reset),
+                                "chains": reset["auth_chain_id"].value_counts(dropna=True).to_dict()
+                                if "auth_chain_id" in reset
+                                else {},
+                            }
+                        )
+                    payload["summaries"] = summaries
+                    payload["summaries_truncated"] = len(entities) > len(summaries)
+
+                return self.format_success(payload)
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_filter_entities(
+            ctx,
+            structure_ids: Union[str, List[str]],
+            filters: List[Dict[str, Any]],
+            combine: str = "and",
+            include_columns: Optional[List[str]] = None,
+            save_as: Optional[str] = None,
+            create_dataset: Optional[str] = None,
+            overwrite_dataset: bool = False,
+            drop_empty: bool = True,
+            return_preview: bool = True,
+            preview_limit: int = 20,
+        ) -> Dict:
+            """Filter structure entities using column-wise predicates."""
+
+            try:
+                if isinstance(structure_ids, str):
+                    target_structures = [structure_ids]
+                else:
+                    target_structures = list(structure_ids)
+
+                if not target_structures:
+                    return self.format_error(
+                        "No structures provided",
+                        "Pass one or more structure identifiers to filter.",
+                    )
+
+                if not filters:
+                    return self.format_error(
+                        "No filters specified",
+                        "Provide at least one filter with a column and operator.",
+                    )
+
+                combine_mode = (combine or "and").lower()
+                if combine_mode not in {"and", "or"}:
+                    return self.format_error(
+                        "Unsupported combine mode",
+                        "Choose 'and' or 'or' for filter combination.",
+                    )
+
+                processor = self.get_processor("structure")
+
+                saved_entities: List[str] = []
+                dataset_entities: List[str] = []
+                results: List[Dict[str, Any]] = []
+                errors: Dict[str, str] = {}
+
+                def build_condition(df: pd.DataFrame, predicate: Dict[str, Any]) -> pd.Series:
+                    column = predicate.get("column")
+                    if not column or column not in df.columns:
+                        raise InvalidInputError(
+                            "column",
+                            f"Column '{column}' not found in structure frame."
+                            if column
+                            else "Filter predicate missing column",
+                        )
+
+                    series = df[column]
+                    op = (predicate.get("op") or "eq").lower()
+                    value = predicate.get("value")
+                    values = predicate.get("values")
+                    case_sensitive = predicate.get("case_sensitive", False)
+
+                    if op in {"eq", "=="}:
+                        return series == value
+                    if op in {"ne", "!="}:
+                        return series != value
+                    if op in {"lt", "<"}:
+                        return series < value
+                    if op in {"le", "<="}:
+                        return series <= value
+                    if op in {"gt", ">"}:
+                        return series > value
+                    if op in {"ge", ">="}:
+                        return series >= value
+                    if op in {"in", "isin"}:
+                        if values is None:
+                            raise InvalidInputError("values", "Provide a 'values' list for 'in' operator")
+                        return series.isin(values)
+                    if op in {"not_in", "notin", "not in"}:
+                        if values is None:
+                            raise InvalidInputError("values", "Provide a 'values' list for 'not_in' operator")
+                        return ~series.isin(values)
+                    if op in {"contains", "icontains"}:
+                        if value is None:
+                            raise InvalidInputError("value", "'contains' operator requires a value")
+                        target = series.astype(str)
+                        return target.str.contains(
+                            str(value),
+                            case=case_sensitive,
+                            na=False,
+                        )
+                    if op == "regex":
+                        if value is None:
+                            raise InvalidInputError("value", "'regex' operator requires a pattern")
+                        target = series.astype(str)
+                        return target.str.contains(
+                            str(value),
+                            regex=True,
+                            case=case_sensitive,
+                            na=False,
+                        )
+                    if op == "between":
+                        lower = predicate.get("lower")
+                        upper = predicate.get("upper")
+                        if lower is None or upper is None:
+                            raise InvalidInputError(
+                                "between",
+                                "'between' operator requires 'lower' and 'upper' bounds",
+                            )
+                        return series.between(lower, upper)
+
+                    raise InvalidInputError("op", f"Unsupported operator '{op}'")
+
+                for structure_id in target_structures:
+                    df = processor.load_entity(structure_id)
+                    if df is None:
+                        errors[structure_id] = "structure_not_found"
+                        continue
+
+                    masks: List[pd.Series] = []
+                    for predicate in filters:
+                        try:
+                            condition = build_condition(df, predicate)
+                            masks.append(condition)
+                        except InvalidInputError as exc:
+                            return self.handle_error(exc)
+
+                    if not masks:
+                        filtered_df = df
+                    else:
+                        if combine_mode == "and":
+                            combined_mask = reduce(lambda a, b: a & b, masks)
+                        else:
+                            combined_mask = reduce(lambda a, b: a | b, masks)
+                        filtered_df = df[combined_mask]
+
+                    original_rows = len(df)
+                    filtered_rows = len(filtered_df)
+
+                    if drop_empty and filtered_rows == 0:
+                        results.append(
+                            {
+                                "structure_id": structure_id,
+                                "original_rows": original_rows,
+                                "filtered_rows": filtered_rows,
+                                "saved_entity": None,
+                                "preview": [],
+                            }
+                        )
+                        continue
+
+                    if include_columns:
+                        missing_columns = [col for col in include_columns if col not in filtered_df.columns]
+                        if missing_columns:
+                            return self.format_error(
+                                "Columns missing in filtered frame",
+                                f"Columns not found: {', '.join(missing_columns)}",
+                            )
+                        preview_frame = filtered_df[include_columns]
+                    else:
+                        preview_frame = filtered_df
+
+                    saved_entity = None
+                    if save_as:
+                        target_id = save_as
+                        if "{structure_id}" in save_as:
+                            target_id = save_as.format(structure_id=structure_id)
+                        metadata = {
+                            "source": "structure_filter_entities",
+                            "filters": filters,
+                            "combine": combine_mode,
+                        }
+                        processor.save_entity(target_id, filtered_df, metadata=metadata)
+                        saved_entity = target_id
+                        saved_entities.append(target_id)
+                        dataset_entities.append(target_id)
+                    else:
+                        dataset_entities.append(structure_id)
+
+                    preview_records: List[Dict[str, Any]] = []
+                    if return_preview:
+                        preview_records = (
+                            preview_frame.head(preview_limit)
+                            .reset_index()
+                            .to_dict(orient="records")
+                        )
+
+                    results.append(
+                        {
+                            "structure_id": structure_id,
+                            "original_rows": original_rows,
+                            "filtered_rows": filtered_rows,
+                            "saved_entity": saved_entity,
+                            "preview": preview_records,
+                        }
+                    )
+
+                dataset_info: Optional[Dict[str, Any]] = None
+                if create_dataset and dataset_entities:
+                    manager = processor.dataset_manager
+                    if manager.dataset_exists(create_dataset):
+                        if overwrite_dataset:
+                            manager.delete_dataset(create_dataset)
+                            manager.create_dataset(create_dataset, dataset_entities, metadata={
+                                "source": "structure_filter_entities",
+                                "filters": filters,
+                                "combine": combine_mode,
+                            })
+                        else:
+                            existing = manager.get_dataset_entities(create_dataset)
+                            to_add = sorted(set(dataset_entities) - set(existing))
+                            to_remove = sorted(set(existing) - set(dataset_entities))
+                            if to_add:
+                                manager.add_to_dataset(create_dataset, to_add)
+                            if to_remove:
+                                manager.remove_from_dataset(create_dataset, to_remove)
+                            metadata_update = {
+                                "source": "structure_filter_entities",
+                                "filters": filters,
+                                "combine": combine_mode,
+                            }
+                            manager.update_metadata(create_dataset, metadata_update)
+                    else:
+                        manager.create_dataset(create_dataset, dataset_entities, metadata={
+                            "source": "structure_filter_entities",
+                            "filters": filters,
+                            "combine": combine_mode,
+                        })
+                    try:
+                        dataset_info = manager.get_dataset_info(create_dataset)
+                    except Exception:  # pragma: no cover - best effort
+                        dataset_info = {
+                            "name": create_dataset,
+                            "entity_count": len(dataset_entities),
+                        }
+
+                payload: Dict[str, Any] = {
+                    "results": results,
+                    "filters": filters,
+                    "combine": combine_mode,
+                    "saved_entities": saved_entities,
+                    "dataset": dataset_info,
+                    "errors": errors,
+                }
+
+                return self.format_success(payload)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_collect_chain_sequences(
+            ctx,
+            structure_ids: List[str],
+            chain_filter: Optional[Union[List[str], Dict[str, List[str]], str]] = None,
+            min_length: int = 1,
+        ) -> Dict:
+            """Collect per-chain sequences for one or more structures."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"structure_ids": structure_ids},
+                    ["structure_ids"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                collected = processor.collect_chain_sequences(
+                    structure_ids,
+                    chain_filter=chain_filter,
+                    min_length=min_length,
+                )
+
+                formatted: Dict[str, Any] = {}
+                for struct_id, chains in collected.items():
+                    formatted[struct_id] = {
+                        chain_id: {
+                            "sequence": payload.get("sequence"),
+                            "length": payload.get("length"),
+                            "residue_span": payload.get("residue_span"),
+                            "metadata": payload.get("metadata", {}),
+                        }
+                        for chain_id, payload in chains.items()
+                    }
+
+                return self.format_success(
+                    {
+                        "structure_ids": structure_ids,
+                        "chain_sequences": formatted,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_list_dataset_sequences(ctx, dataset_name: str) -> Dict:
+            """List sequences related to each structure in a dataset."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name},
+                    ["dataset_name"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                relations = processor.list_dataset_related_sequences(
+                    dataset_name,
+                    include_unloaded=True,
+                )
+
+                formatted: Dict[str, List[Dict[str, Any]]] = {}
+                for struct_id, entries in relations.items():
+                    formatted[struct_id] = [
+                        {
+                            "sequence_name": entry.get("name"),
+                            "metadata": entry.get("metadata", {}),
+                        }
+                        for entry in entries
+                    ]
+
+                return self.format_success(
+                    {
+                        "dataset_name": dataset_name,
+                        "structures": formatted,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_annotate_entities(
+            ctx,
+            structure_id: str,
+            chain_annotations: Dict[str, Dict[str, Any]],
+            structure_metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict:
+            """Apply chain-level and optional structure-level annotations."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"structure_id": structure_id, "chain_annotations": chain_annotations},
+                    ["structure_id", "chain_annotations"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                annotations: Dict[str, Any] = {
+                    "chains": chain_annotations,
+                }
+                if structure_metadata:
+                    annotations["structure"] = structure_metadata
+
+                processor.annotate_structure(structure_id, annotations)
+
+                return self.format_success(
+                    {
+                        "structure_id": structure_id,
+                        "chains": chain_annotations,
+                        "structure": structure_metadata or {},
+                    },
+                    message="Structure annotated",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_export_dataset(
+            ctx,
+            dataset_name: str,
+            output_dir: str,
+            format: str = "cif",
+            overwrite: bool = True,
+        ) -> Dict:
+            """Export all structures in a dataset."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name, "output_dir": output_dir},
+                    ["dataset_name", "output_dir"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                exported = processor.export_dataset(
+                    dataset_name,
+                    Path(output_dir).expanduser(),
+                    format=format,
+                    overwrite=overwrite,
+                )
+
+                mapping = {key: str(path) for key, path in exported.items()}
+
+                return self.format_success(
+                    {
+                        "dataset_name": dataset_name,
+                        "export_directory": str(Path(output_dir).expanduser()),
+                        "files": mapping,
+                    },
+                    message="Dataset exported",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_export_entity(
+            ctx,
+            structure_id: str,
+            output_path: str,
+            format: str = "cif",
+            overwrite: bool = True,
+        ) -> Dict:
+            """Export a single structure entity."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"structure_id": structure_id, "output_path": output_path},
+                    ["structure_id", "output_path"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                exported = processor.export_entity(
+                    structure_id,
+                    Path(output_path).expanduser(),
+                    format=format,
+                    overwrite=overwrite,
+                )
+
+                return self.format_success(
+                    {
+                        "structure_id": structure_id,
+                        "export_path": str(exported),
+                    },
+                    message="Structure exported",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_apply_grn_annotations(
+            ctx,
+            grn_table: str,
+            structures: List[str],
+            column_name: str = "grn",
+            save_entities: bool = True,
+        ) -> Dict:
+            """Map GRN annotations from a table onto structure residues."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"grn_table": grn_table, "structures": structures},
+                    ["grn_table", "structures"],
+                ):
+                    return error
+
+                if not structures:
+                    return self.format_error(
+                        "No structures provided",
+                        "Pass one or more structure IDs to annotate",
+                    )
+
+                struct_proc = self.get_processor("structure")
+                grn_proc = self.get_processor("grn")
+                table = grn_proc.load_table(grn_table).fillna('-')
+
+                annotation_counts: Dict[str, Dict[str, int]] = {}
+                skipped: Dict[str, str] = {}
+
+                for structure_id in structures:
+                    frame = struct_proc.load_entity(structure_id)
+                    if frame is None:
+                        skipped[structure_id] = "structure_not_found"
+                        continue
+
+                    reset = frame.reset_index()
+                    if column_name not in reset.columns:
+                        reset[column_name] = '-'
+                    else:
+                        reset[column_name] = reset[column_name].fillna('-')
+                    chains = reset['auth_chain_id'].unique().tolist()
+                    chain_stats: Dict[str, int] = {}
+
+                    for chain_id in chains:
+                        seq_name = f"{structure_id}_chain_{chain_id}"
+                        if seq_name not in table.index:
+                            skipped[seq_name] = "sequence_not_in_grn_table"
+                            continue
+
+                        row = table.loc[seq_name]
+                        seq_pos_to_grn: Dict[int, str] = {}
+                        for grn_pos, value in row.items():
+                            if not isinstance(value, str) or value in {'-', ''}:
+                                continue
+                            digits = ''.join(filter(str.isdigit, value))
+                            if not digits:
+                                continue
+                            seq_pos = int(digits)
+                            if seq_pos > 0:
+                                seq_pos_to_grn[seq_pos] = grn_pos
+
+                        chain_df = reset[reset['auth_chain_id'] == chain_id].copy()
+                        chain_df[column_name] = chain_df[column_name].fillna('-')
+
+                        residue_positions = (
+                            chain_df.groupby(['auth_seq_id', 'insertion']).first().reset_index()
+                        )
+
+                        assigned = 0
+                        for _, residue in residue_positions.iterrows():
+                            seq_pos = residue['auth_seq_id']
+                            grn_label = seq_pos_to_grn.get(int(seq_pos), '-')
+                            mask = (
+                                (chain_df['auth_seq_id'] == seq_pos)
+                                & (chain_df['insertion'] == residue['insertion'])
+                            )
+                            chain_df.loc[mask, column_name] = grn_label
+                            if grn_label != '-':
+                                assigned += 1
+
+                        reset.loc[chain_df.index, column_name] = chain_df[column_name]
+                        chain_stats[chain_id] = assigned
+
+                    annotation_counts[structure_id] = chain_stats
+
+                    if save_entities:
+                        struct_proc.save_entity(structure_id, reset)
+
+                return self.format_success(
+                    {
+                        "grn_table": grn_table,
+                        "structures": structures,
+                        "column": column_name,
+                        "annotation_counts": annotation_counts,
+                        "skipped": skipped,
+                        "saved": save_entities,
+                    }
+                )
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
         @server.tool()
         def extract_sequence_from_structure(ctx, pdb_id: str,
                                           chain_id: str = "A",
@@ -43,28 +734,15 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Extract sequence
-                try:
-                    sequence = processor.get_sequence(pdb_id, chain_id)
-                except ValueError as e:
+
+                sequence = processor.get_sequence(pdb_id, chain_id)
+                if sequence is None:
                     return self.format_error(
-                        str(e),
-                        f"Make sure structure {pdb_id} is loaded and chain {chain_id} exists"
+                        f"Chain {chain_id} not found in structure {pdb_id}",
+                        "Ensure the structure exists and the chain identifier is correct",
                     )
-                
-                if not sequence:
-                    return self.format_error(
-                        f"No sequence found for {pdb_id} chain {chain_id}",
-                        "Check if the chain exists in the structure"
-                    )
-                
+
                 result = {
                     "pdb_id": pdb_id,
                     "chain_id": chain_id,
@@ -112,35 +790,22 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Get all sequences
-                try:
-                    sequences = processor.get_all_sequences()
-                except Exception as e:
-                    return self.format_error(
-                        f"Failed to extract sequences: {str(e)}",
-                        f"Make sure structure {pdb_id} is loaded"
-                    )
-                
-                # Filter to this PDB ID
-                pdb_sequences = {
-                    chain_id: seq 
-                    for chain_id, seq in sequences.items() 
-                    if chain_id.startswith(f"{pdb_id}_")
-                }
-                
-                if not pdb_sequences:
+                collected = processor.collect_chain_sequences([pdb_id])
+                chains = collected.get(pdb_id, {})
+
+                if not chains:
                     return self.format_error(
                         f"No sequences found for {pdb_id}",
-                        "Structure may not be loaded or has no chains"
+                        "Ensure the structure exists and contains chains",
                     )
-                
+
+                pdb_sequences = {
+                    payload.get("entity_name", f"{pdb_id}_chain_{chain_id}"): payload.get("sequence")
+                    for chain_id, payload in chains.items()
+                    if payload.get("sequence")
+                }
+
                 result = {
                     "pdb_id": pdb_id,
                     "chains": len(pdb_sequences),
@@ -194,22 +859,15 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Get chains
                 chains = processor.get_chains(pdb_id)
-                
+
                 if not chains:
                     return self.format_error(
                         f"No chains found for {pdb_id}",
-                        "Structure may not be loaded"
+                        "Ensure the structure exists",
                     )
-                
+
                 # Get additional info for each chain
                 chain_info = []
                 for chain in chains:
@@ -235,7 +893,7 @@ class StructureAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def get_ca_coordinates(ctx, pdb_id: str, chain_id: str = "A") -> Dict:
+        def structure_get_ca_coordinates(ctx, pdb_id: str, chain_id: str = "A") -> Dict:
             """
             Get C-alpha atom coordinates for a chain.
             
@@ -254,15 +912,9 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Get coordinates
                 try:
+                    processor.load_entity(pdb_id)
                     coords = processor.get_ca_coordinates(pdb_id, chain_id)
                 except ValueError as e:
                     return self.format_error(
@@ -304,12 +956,13 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
+                frame = processor.load_entity(pdb_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{pdb_id}' not found",
+                        "Download or register the structure before extracting ligands",
+                    )
                 
                 # Import analysis function
                 try:
@@ -350,9 +1003,393 @@ class StructureAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
-        
+
         @server.tool()
-        def get_binding_site_residues(ctx, pdb_id: str,
+        def structure_extract_water_molecules(
+            ctx,
+            pdb_id: str,
+            min_atoms: int = 1,
+        ) -> Dict:
+            """List water molecules treated as ligand-like records."""
+
+            if error := self.validate_required_params(
+                {"pdb_id": pdb_id}, ["pdb_id"],
+            ):
+                return error
+
+            processor = self.get_processor("structure")
+            frame = processor.load_entity(pdb_id)
+            if frame is None:
+                return self.format_error(
+                    f"Structure '{pdb_id}' not found",
+                    "Download or register the structure before extracting waters",
+                )
+
+            try:
+                from protos.analysis.structure_ligand_analysis import extract_water_molecules as _extract_water_molecules
+            except ImportError:
+                return self.format_error(
+                    "Water extraction helpers are unavailable",
+                    "Ensure protos.analysis is installed",
+                )
+
+            waters = _extract_water_molecules(
+                processor,
+                pdb_id,
+                min_atoms=min_atoms,
+            )
+
+            return self.format_success(
+                {
+                    "pdb_id": pdb_id,
+                    "water_count": len(waters),
+                    "waters": waters,
+                }
+            )
+
+        @server.tool()
+        def structure_compute_water_networks(
+            ctx,
+            structure_ids: Union[str, List[str]],
+            residue_cutoff: float = 3.4,
+            water_water_cutoff: float = 3.4,
+            hydrogen_bond_cutoff: float = 3.2,
+            property_table_name: Optional[str] = None,
+            allow_create_property_table: bool = False,
+            include_raw: bool = False,
+            include_networks: bool = False,
+            include_contacts: bool = False,
+            network_table_name: Optional[str] = None,
+            contact_table_name: Optional[str] = None,
+            allow_create_network_table: bool = False,
+            allow_create_contact_table: bool = False,
+            max_paths: int = 5,
+        ) -> Dict:
+            """Analyze water-mediated residue networks for the given structures.
+
+            Returns summary counts by default. Use ``include_networks`` and
+            ``include_contacts`` to embed sanitized network/contact payloads in the
+            response, and provide ``network_table_name``/``contact_table_name`` when
+            you want the detailed rows recorded as property tables.
+            """
+
+            def _simplify_residue(residue: Dict[str, Any]) -> Dict[str, Any]:
+                return {
+                    "label": residue.get("label"),
+                    "chain_id": residue.get("chain_id"),
+                    "seq_id": residue.get("seq_id"),
+                    "res_name": residue.get("res_name"),
+                    "grn_labels": residue.get("grn_labels", []),
+                }
+
+            def _simplify_water(water: Dict[str, Any]) -> Dict[str, Any]:
+                return {
+                    "label": water.get("label"),
+                    "chain_id": water.get("chain_id"),
+                    "seq_id": water.get("seq_id"),
+                }
+
+            def _format_paths(network: Dict[str, Any]) -> List[str]:
+                sequences: List[str] = []
+                raw_paths = network.get("paths") or []
+                limit = max_paths if max_paths and max_paths > 0 else None
+                for path in raw_paths[:limit]:
+                    seq = path.get("sequence_str")
+                    if not seq:
+                        seq = " -> ".join(path.get("sequence", []))
+                    sequences.append(seq)
+                return sequences
+
+            def _simplify_network(struct_id: str, network: Dict[str, Any]) -> Dict[str, Any]:
+                residues = [_simplify_residue(res) for res in network.get("residues", [])]
+                waters = [_simplify_water(w) for w in network.get("waters", [])]
+                bridging = [_simplify_water(w) for w in network.get("bridging_waters", [])]
+                summary = network.get("summary", {})
+                return {
+                    "structure_id": struct_id,
+                    "network_id": network.get("network_id"),
+                    "chains": network.get("chains", []),
+                    "summary": summary,
+                    "residues": residues,
+                    "waters": [w["label"] for w in waters if w.get("label")],
+                    "bridging_waters": [w["label"] for w in bridging if w.get("label")],
+                    "paths": _format_paths(network),
+                    "residue_grn_map": {
+                        res["label"]: res.get("grn_labels", []) for res in residues if res.get("label")
+                    },
+                }
+
+            def _simplify_contacts(struct_id: str, network: Dict[str, Any]) -> List[Dict[str, Any]]:
+                simplified: List[Dict[str, Any]] = []
+                for edge in network.get("residue_water_edges", []) or []:
+                    residue = edge.get("residue", {})
+                    water = edge.get("water", {})
+                    simplified.append(
+                        {
+                            "structure_id": struct_id,
+                            "network_id": network.get("network_id"),
+                            "residue_label": residue.get("label"),
+                            "residue_chain": residue.get("chain_id"),
+                            "residue_seq_id": residue.get("seq_id"),
+                            "residue_name": residue.get("res_name"),
+                            "residue_grn_labels": residue.get("grn_labels", []),
+                            "water_label": water.get("label"),
+                            "water_chain": water.get("chain_id"),
+                            "water_seq_id": water.get("seq_id"),
+                            "distance": edge.get("distance"),
+                            "hydrogen_bond": edge.get("hydrogen_bond"),
+                            "backbone_contact": edge.get("backbone_contact"),
+                        }
+                    )
+                return simplified
+
+            try:
+                if isinstance(structure_ids, str):
+                    requested_ids = [structure_ids]
+                else:
+                    requested_ids = list(structure_ids)
+
+                if not requested_ids:
+                    raise InvalidInputError("structure_ids", "Provide at least one structure identifier")
+
+                processor = self.get_processor("structure")
+                analysis = processor.compute_water_networks(
+                    requested_ids,
+                    residue_cutoff=residue_cutoff,
+                    water_water_cutoff=water_water_cutoff,
+                    hydrogen_bond_cutoff=hydrogen_bond_cutoff,
+                    property_table_name=property_table_name,
+                    property_metadata={
+                        'tool': 'structure_compute_water_networks',
+                        'requested_ids': requested_ids,
+                    },
+                    allow_create_property_table=allow_create_property_table,
+                )
+
+                summary_map = summarize_water_networks(analysis)
+                payload: Dict[str, Any] = {
+                    'requested_ids': requested_ids,
+                    'parameters': {
+                        'residue_cutoff': residue_cutoff,
+                        'water_water_cutoff': water_water_cutoff,
+                        'hydrogen_bond_cutoff': hydrogen_bond_cutoff,
+                    },
+                    'structures': summary_map,
+                    'errors': analysis.get('errors', {}),
+                }
+
+                if analysis.get('property_table'):
+                    payload['property_table'] = analysis['property_table']
+
+                raw_structures = analysis.get('structures', {}) or {}
+
+                network_details: Dict[str, Any] = {}
+                contact_details: Dict[str, List[Dict[str, Any]]] = {}
+
+                needs_networks = include_networks or network_table_name is not None
+                needs_contacts = include_contacts or contact_table_name is not None
+
+                if needs_networks or needs_contacts:
+                    for struct_id, info in raw_structures.items():
+                        networks = info.get('networks', []) or []
+                        simplified_networks = [
+                            _simplify_network(struct_id, net)
+                            for net in networks
+                        ]
+                        if needs_networks:
+                            network_details[struct_id] = {
+                                'networks': simplified_networks,
+                            }
+                        if needs_contacts:
+                            all_contacts: List[Dict[str, Any]] = []
+                            for net, simplified in zip(networks, simplified_networks):
+                                all_contacts.extend(_simplify_contacts(struct_id, net))
+                            if all_contacts:
+                                contact_details[struct_id] = all_contacts
+
+                if include_networks and network_details:
+                    payload['networks'] = network_details
+
+                if include_contacts and contact_details:
+                    payload['contacts'] = contact_details
+
+                property_tables: Dict[str, Any] = {}
+
+                if network_table_name and network_details:
+                    rows: List[Dict[str, Any]] = []
+                    for struct_id, entry in network_details.items():
+                        for network in entry.get('networks', []):
+                            rows.append(
+                                {
+                                    "scope": [
+                                        {"format": "structure", "name": struct_id},
+                                    ],
+                                    "entity_name": f"{struct_id}_network_{network.get('network_id')}",
+                                    "structure_id": struct_id,
+                                    "network_id": network.get('network_id'),
+                                    "chains": network.get('chains', []),
+                                    "residue_labels": [
+                                        res.get('label') for res in network.get('residues', [])
+                                        if res.get('label')
+                                    ],
+                                    "waters": network.get('waters', []),
+                                    "bridging_waters": network.get('bridging_waters', []),
+                                    "paths": network.get('paths', []),
+                                    "residue_grn_map": network.get('residue_grn_map', {}),
+                                    "residue_count": network.get('summary', {}).get('residue_count'),
+                                    "water_count": network.get('summary', {}).get('water_count'),
+                                    "max_residue_path_length": network.get('summary', {}).get('max_residue_path_length'),
+                                }
+                            )
+
+                    if rows:
+                        property_processor = self.get_processor("property")
+                        recorded = property_processor.record_properties(
+                            network_table_name,
+                            rows,
+                            metadata={
+                                'source': 'structure_compute_water_networks',
+                                'kind': 'network',
+                            },
+                            allow_create=allow_create_network_table,
+                        )
+                        property_tables['network_table'] = {
+                            'name': network_table_name,
+                            'row_count': int(len(recorded)),
+                            'columns': recorded.columns.tolist(),
+                        }
+
+                if contact_table_name and contact_details:
+                    contact_rows: List[Dict[str, Any]] = []
+                    for struct_id, contacts in contact_details.items():
+                        for contact in contacts:
+                            contact_rows.append(
+                                {
+                                    "scope": [
+                                        {"format": "structure", "name": struct_id},
+                                    ],
+                                    "entity_name": f"{struct_id}_{contact.get('residue_label')}_to_{contact.get('water_label')}",
+                                    "structure_id": struct_id,
+                                    "network_id": contact.get('network_id'),
+                                    "residue_label": contact.get('residue_label'),
+                                    "residue_chain": contact.get('residue_chain'),
+                                    "residue_seq_id": contact.get('residue_seq_id'),
+                                    "residue_name": contact.get('residue_name'),
+                                    "residue_grn_labels": contact.get('residue_grn_labels', []),
+                                    "water_label": contact.get('water_label'),
+                                    "water_chain": contact.get('water_chain'),
+                                    "water_seq_id": contact.get('water_seq_id'),
+                                    "distance": contact.get('distance'),
+                                    "hydrogen_bond": contact.get('hydrogen_bond'),
+                                    "backbone_contact": contact.get('backbone_contact'),
+                                }
+                            )
+
+                    if contact_rows:
+                        property_processor = self.get_processor("property")
+                        recorded_contacts = property_processor.record_properties(
+                            contact_table_name,
+                            contact_rows,
+                            metadata={
+                                'source': 'structure_compute_water_networks',
+                                'kind': 'contact',
+                            },
+                            allow_create=allow_create_contact_table,
+                        )
+                        property_tables['contact_table'] = {
+                            'name': contact_table_name,
+                            'row_count': int(len(recorded_contacts)),
+                            'columns': recorded_contacts.columns.tolist(),
+                        }
+
+                if property_tables:
+                    payload['property_tables'] = property_tables
+
+                if include_raw:
+                    payload['raw_structures'] = raw_structures
+
+                return self.format_success(payload)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_compute_embedding_similarity(
+            ctx,
+            reference_structure: str,
+            reference_chain: str,
+            embedding_dataset: str,
+            selection: List[Dict[str, str]],
+            window_size: int = 8,
+            max_gap: int = 30,
+            property_table_name: Optional[str] = None,
+            record_property_table: bool = False,
+            include_records: bool = False,
+            include_plot_points: bool = False,
+        ) -> Dict:
+            """Compute per-residue embedding similarity relative to a reference chain."""
+
+            try:
+                if not selection:
+                    return self.format_error(
+                        "Selection required",
+                        "Provide chain/sequence mappings for each structure.",
+                    )
+
+                try:
+                    selection_objs = [
+                        ChainSelection(
+                            structure_id=item["structure_id"],
+                            chain_id=item["chain_id"],
+                            sequence_id=item["sequence_id"],
+                        )
+                        for item in selection
+                    ]
+                except KeyError as exc:
+                    return self.format_error(
+                        "Invalid selection entry",
+                        f"Missing key: {exc.args[0]}. Expected structure_id, chain_id, sequence_id.",
+                    )
+
+                struct_proc = self.get_processor("structure")
+                embedding_proc = self.get_processor("embedding")
+
+                result = compute_structure_embedding_similarity(
+                    struct_proc,
+                    embedding_proc,
+                    selection_objs,
+                    reference_structure=reference_structure,
+                    reference_chain=reference_chain,
+                    embedding_dataset=embedding_dataset,
+                    window_size=window_size,
+                    max_gap=max_gap,
+                    property_table_name=property_table_name,
+                    property_metadata={"tool": "structure_compute_embedding_similarity"},
+                    record_property_table=record_property_table,
+                )
+
+                response: Dict[str, Any] = {
+                    "reference_structure": reference_structure,
+                    "reference_chain": reference_chain,
+                    "embedding_dataset": embedding_dataset,
+                    "rmsd": result["rmsd"],
+                    "property_table": result.get("property_table"),
+                    "summary": result["summary"].to_dict(orient="records"),
+                }
+
+                if include_records:
+                    response["records"] = result["records"].to_dict(orient="records")
+
+                if include_plot_points:
+                    response["plot_points"] = result["plot_points"]
+
+                return self.format_success(response)
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_get_binding_site_residues(ctx, pdb_id: str,
                                     ligand_name: str,
                                     chain_id: Optional[str] = None,
                                     cutoff: float = 5.0) -> Dict:
@@ -376,12 +1413,13 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
+                frame = processor.load_entity(pdb_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{pdb_id}' not found",
+                        "Download or register the structure before computing binding sites",
+                    )
                 
                 # Import analysis functions
                 try:
@@ -436,7 +1474,7 @@ class StructureAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def analyze_ligand_interactions(ctx, pdb_id: str,
+        def structure_analyze_ligand_interactions(ctx, pdb_id: str,
                                        ligand_name: str,
                                        chain_id: Optional[str] = None,
                                        detailed: bool = True) -> Dict:
@@ -473,11 +1511,13 @@ class StructureAnalysisTools(BaseTool):
                 # Get structure processor
                 processor = self.get_processor("structure")
                 
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
+                frame = processor.load_entity(pdb_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{pdb_id}' not found",
+                        "Download or register the structure before analyzing ligand interactions",
+                    )
                 
-                # Import analysis function
                 try:
                     from protos.analysis.structure_ligand_analysis import calculate_ligand_interactions
                 except ImportError:
@@ -485,13 +1525,12 @@ class StructureAnalysisTools(BaseTool):
                         "Advanced ligand analysis module not available",
                         "Ensure protos.analysis is installed"
                     )
-                
-                # Get ligand atoms
-                structure_data = processor.data[processor.data['pdb_id'] == pdb_id]
+
+                structure_data = frame.reset_index()
                 ligand_filter = (structure_data['group'] == 'HETATM') & (structure_data['res_name3l'] == ligand_name)
                 if chain_id:
                     ligand_filter &= (structure_data['auth_chain_id'] == chain_id)
-                
+
                 ligand_atoms = structure_data[ligand_filter]
                 
                 if ligand_atoms.empty:
@@ -535,7 +1574,7 @@ class StructureAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def analyze_binding_pocket(ctx, pdb_id: str,
+        def structure_analyze_binding_pocket(ctx, pdb_id: str,
                                  ligand_name: str,
                                  chain_id: Optional[str] = None,
                                  cutoff: float = 8.0,
@@ -567,14 +1606,14 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Import analysis functions
+                frame = processor.load_entity(pdb_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{pdb_id}' not found",
+                        "Download or register the structure before analyzing binding pockets",
+                    )
+
                 try:
                     from protos.analysis.structure_ligand_analysis import (
                         get_binding_site, estimate_binding_site_volume
@@ -584,9 +1623,8 @@ class StructureAnalysisTools(BaseTool):
                         "Binding pocket analysis module not available",
                         "Ensure protos.analysis is installed"
                     )
-                
-                # Get ligand atoms
-                structure_data = processor.data[processor.data['pdb_id'] == pdb_id]
+
+                structure_data = frame.reset_index()
                 ligand_filter = (structure_data['group'] == 'HETATM') & (structure_data['res_name3l'] == ligand_name)
                 if chain_id:
                     ligand_filter &= (structure_data['auth_chain_id'] == chain_id)
@@ -694,15 +1732,15 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structure if needed
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                
-                # Get structure data
-                structure_data = processor.data[processor.data['pdb_id'] == pdb_id]
+                frame = processor.load_entity(pdb_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{pdb_id}' not found",
+                        "Download or register the structure before computing properties",
+                    )
+
+                structure_data = frame.reset_index()
                 if chain_id:
                     structure_data = structure_data[structure_data['auth_chain_id'] == chain_id]
                 
@@ -769,16 +1807,20 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structures if not already loaded
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([reference_pdb, mobile_pdb])
-                
-                # Get structure data
-                ref_data = processor.data[processor.data['pdb_id'] == reference_pdb].copy()
-                mob_data = processor.data[processor.data['pdb_id'] == mobile_pdb].copy()
+                self._ensure_structures_loaded(processor, [reference_pdb, mobile_pdb])
+
+                ref_frame = processor.load_entity(reference_pdb)
+                mob_frame = processor.load_entity(mobile_pdb)
+
+                if ref_frame is None or mob_frame is None:
+                    return self.format_error(
+                        "One or both structures not found",
+                        "Ensure both structures are registered",
+                    )
+
+                ref_data = ref_frame.reset_index()
+                mob_data = mob_frame.reset_index()
                 
                 if ref_data.empty:
                     return self.format_error(
@@ -904,17 +1946,17 @@ class StructureAnalysisTools(BaseTool):
                         "Use 'all_vs_all' or 'one_vs_all'"
                     )
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load all structures
-                processor.load_structures(pdb_ids)
+                self._ensure_structures_loaded(processor, pdb_ids)
                 
                 # Prepare structure data
                 processed_structures = {}
                 
                 for pdb_id in pdb_ids:
-                    pdb_data = processor.data[processor.data['pdb_id'] == pdb_id].copy()
+                    frame = processor.load_entity(pdb_id)
+                    if frame is None:
+                        continue
+                    pdb_data = frame.reset_index()
                     
                     if pdb_data.empty:
                         continue
@@ -1033,15 +2075,19 @@ class StructureAnalysisTools(BaseTool):
                 ):
                     return error
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load structures
-                processor.load_structures([reference_pdb, mobile_pdb])
-                
-                # Get full structure data
-                ref_data = processor.data[processor.data['pdb_id'] == reference_pdb].copy()
-                mob_data = processor.data[processor.data['pdb_id'] == mobile_pdb].copy()
+                self._ensure_structures_loaded(processor, [reference_pdb, mobile_pdb])
+
+                ref_frame = processor.load_entity(reference_pdb)
+                mob_frame = processor.load_entity(mobile_pdb)
+                if ref_frame is None or mob_frame is None:
+                    return self.format_error(
+                        "One or both structures not found",
+                        "Ensure both structures are registered",
+                    )
+
+                ref_data = ref_frame.reset_index()
+                mob_data = mob_frame.reset_index()
                 
                 if ref_data.empty or mob_data.empty:
                     return self.format_error(
@@ -1117,9 +2163,9 @@ class StructureAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
-        
+
         @server.tool()
-        def compare_ligand_binding_sites(ctx, structures: List[Dict[str, str]],
+        def structure_compare_ligand_binding_sites(ctx, structures: List[Dict[str, str]],
                                        cutoff: float = 5.0,
                                        similarity_threshold: float = 0.5) -> Dict:
             """
@@ -1158,12 +2204,9 @@ class StructureAnalysisTools(BaseTool):
                             "Each structure needs 'pdb_id' and 'ligand_name'"
                         )
                 
-                # Get structure processor
                 processor = self.get_processor("structure")
-                
-                # Load all structures
                 pdb_ids = [s['pdb_id'] for s in structures]
-                processor.load_structures(pdb_ids)
+                self._ensure_structures_loaded(processor, pdb_ids)
                 
                 # Import analysis functions
                 try:
@@ -1303,7 +2346,218 @@ class StructureAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
-        
+
+        @server.tool()
+        def structure_align_to_reference(
+            ctx,
+            reference_id: str,
+            structure_ids: List[str],
+            method: str = "cealign",
+            atom_selection: str = "CA",
+            apply_transform: bool = True,
+            chain_id: Optional[str] = None,
+            cealign_window: int = 8,
+            cealign_max_gap: int = 30,
+            export_aligned: bool = False,
+            export_format: str = "cif",
+            export_directory: Optional[str] = None,
+            save_dataset_name: Optional[str] = None,
+            include_reference_in_dataset: bool = True,
+            persist_aligned: bool = False,
+            summary_name: Optional[str] = None,
+            property_table_name: Optional[str] = None,
+        ) -> Dict:
+            """Align structures via `StructureProcessor.align_and_record` and surface registry artifacts."""
+
+            if error := self.validate_required_params(
+                {"reference_id": reference_id, "structure_ids": structure_ids},
+                ["reference_id", "structure_ids"],
+            ):
+                return error
+
+            ordered_ids = list(dict.fromkeys(structure_ids))
+            targets = [sid for sid in ordered_ids if sid != reference_id]
+
+            if not targets:
+                return self.format_error(
+                    "No alignable structures provided",
+                    "Provide at least one structure ID different from the reference.",
+                )
+
+            processor = self.get_processor("structure")
+
+            try:
+                if processor.load_entity(reference_id) is None:
+                    return self.format_error(
+                        f"Reference structure '{reference_id}' not available",
+                        "Download the reference structure before aligning.",
+                    )
+
+                missing = [sid for sid in targets if processor.load_entity(sid) is None]
+                if missing:
+                    return self.format_error(
+                        f"Structures not available: {', '.join(missing)}",
+                        "Download structures first with structure_download or structure_download_batch.",
+                    )
+
+                summary_metadata = {
+                    "requested_by": "structure_align_to_reference",
+                    "requested_at": datetime.utcnow().isoformat(),
+                }
+
+                summary_payload, _ = processor.align_and_record(
+                    structure_ids=targets,
+                    reference_id=reference_id,
+                    method=method,
+                    atom_selection=atom_selection,
+                    chain_id=chain_id,
+                    cealign_window=cealign_window,
+                    cealign_max_gap=cealign_max_gap,
+                    apply_transform=apply_transform,
+                    save_aligned=persist_aligned or export_aligned or bool(save_dataset_name),
+                    summary_name=summary_name,
+                    summary_metadata=summary_metadata,
+                    aligned_dataset_name=save_dataset_name,
+                    aligned_dataset_include_reference=include_reference_in_dataset,
+                    property_table_name=property_table_name,
+                )
+
+                pairwise = summary_payload.get("rmsd", {}).get("pairwise", [])
+                results_map = summary_payload.get("results", {})
+
+                rmsd_map: Dict[str, Dict[str, Optional[float]]] = {}
+                alignments: List[Dict[str, Any]] = []
+
+                for row in pairwise:
+                    target = row.get("target_id")
+                    reference = row.get("reference_id")
+                    if not target or not reference:
+                        continue
+                    rmsd_map.setdefault(target, {})[reference] = row.get("rmsd")
+                    result_info = results_map.get(target, {})
+                    alignments.append(
+                        {
+                            "structure_id": target,
+                            "reference_id": reference,
+                            "aligned_id": result_info.get("aligned_id"),
+                            "rmsd": row.get("rmsd"),
+                            "algorithm": row.get("algorithm") or result_info.get("algorithm"),
+                            "error": result_info.get("error"),
+                        }
+                    )
+
+                export_paths: Dict[str, str] = {}
+                if export_aligned and summary_payload.get("aligned_entities"):
+                    export_dir_path = (
+                        Path(export_directory)
+                        if export_directory
+                        else Path(self.paths.get_processor_path("structure")) / "aligned_exports"
+                    )
+                    export_dir_path.mkdir(parents=True, exist_ok=True)
+                    try:
+                        exported = processor.export_aligned_structures(
+                            structure_ids=summary_payload.get("aligned_entities"),
+                            output_dir=export_dir_path,
+                            overwrite=True,
+                            export_format=export_format,
+                        )
+                        export_paths = {name: str(path) for name, path in exported.items()}
+                    except Exception as exc:  # noqa: BLE001
+                        export_paths = {"error": str(exc)}
+
+                payload: Dict[str, Any] = {
+                    "reference_id": reference_id,
+                    "structure_ids": targets,
+                    "summary": summary_payload.get("rmsd", {}).get("global"),
+                    "rmsd_map": rmsd_map,
+                    "alignments": alignments,
+                    "atom_selection": atom_selection,
+                    "method": method,
+                    "apply_transform": apply_transform,
+                }
+
+                if chain_id:
+                    payload["chain_id"] = chain_id
+
+                if export_paths:
+                    payload["exported_files"] = export_paths
+
+                if summary_payload.get("summary_file"):
+                    payload["summary_file"] = summary_payload["summary_file"]
+
+                if summary_payload.get("summary_dataset"):
+                    payload["summary_dataset"] = summary_payload["summary_dataset"]
+
+                if summary_payload.get("aligned_dataset") is not None:
+                    payload["aligned_dataset"] = summary_payload["aligned_dataset"]
+                    if summary_payload.get("aligned_dataset"):
+                        aligned_entities = summary_payload.get("aligned_entities", []) or []
+                        entity_count = len(aligned_entities)
+                        if include_reference_in_dataset and reference_id not in aligned_entities:
+                            entity_count += 1
+                        payload["dataset"] = {
+                            "name": summary_payload["aligned_dataset"],
+                            "entity_count": entity_count,
+                        }
+
+                if summary_payload.get("property_table"):
+                    payload["property_table"] = summary_payload["property_table"]
+
+                if summary_payload.get("aligned_entities"):
+                    payload["aligned_entities"] = summary_payload["aligned_entities"]
+
+                if summary_payload.get("summary_name"):
+                    payload["summary_name"] = summary_payload["summary_name"]
+
+                if summary_payload.get("metadata"):
+                    payload["metadata"] = summary_payload["metadata"]
+
+                if summary_payload.get("errors"):
+                    payload["errors"] = summary_payload["errors"]
+
+                return self.format_success(payload)
+
+            except Exception as exc:
+                return self.handle_error(exc)
+
+        @server.tool()
+        def structure_dataset_stats(
+            ctx,
+            dataset_name: str,
+            include_entities: bool = False,
+        ) -> Dict:
+            """Summarize a structure dataset (entity counts, metadata)."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name}, ["dataset_name"],
+            ):
+                return error
+
+            processor = self.get_processor("structure")
+            manager = getattr(processor, "dataset_manager", None)
+            if manager is None or not manager.dataset_exists(dataset_name):
+                return self.format_error(
+                    f"Structure dataset '{dataset_name}' not found",
+                    "Use dataset.list_datasets to confirm available structure datasets.",
+                )
+
+            info = manager.get_dataset_info(dataset_name)
+            entities = manager.get_dataset_entities(dataset_name)
+
+            preview = []
+            if include_entities:
+                preview = entities[: min(25, len(entities))]
+
+            result = {
+                "dataset_name": dataset_name,
+                "entity_count": len(entities),
+                "metadata": info.get("metadata", {}),
+            }
+            if include_entities:
+                result["entities"] = preview
+                result["truncated"] = len(entities) > len(preview)
+
+            return self.format_success(result)
         @server.tool()
         def extract_sequences_from_structure(ctx, pdb_id: str,
                                            chain_ids: Optional[List[str]] = None,
@@ -1334,66 +2588,51 @@ class StructureAnalysisTools(BaseTool):
                 # Get structure processor
                 processor = self.get_processor("structure")
                 
-                # Load structure if not already loaded
-                if not hasattr(processor, 'data') or processor.data is None:
-                    processor.load_structures([pdb_id])
-                elif pdb_id not in processor.data['pdb_id'].unique():
-                    processor.load_structures([pdb_id])
-                
-                # Get structure data
-                structure_data = processor.data[processor.data['pdb_id'] == pdb_id]
-                
-                if structure_data.empty:
+                collected = processor.collect_chain_sequences([pdb_id])
+                chain_payloads = collected.get(pdb_id, {})
+
+                if not chain_payloads:
                     return self.format_error(
-                        f"Structure {pdb_id} not found",
-                        "Ensure the structure is loaded"
+                        f"Structure {pdb_id} not found or contains no chains",
+                        "Ensure the structure is registered and chain sequences are available",
                     )
-                
-                # Get available chains
-                available_chains = structure_data['auth_chain_id'].unique().tolist()
-                
-                # Use specified chains or all chains
+
+                available_chains = list(chain_payloads.keys())
                 if chain_ids:
                     chains_to_extract = [c for c in chain_ids if c in available_chains]
                     if not chains_to_extract:
                         return self.format_error(
                             f"None of the specified chains {chain_ids} found in structure",
-                            f"Available chains: {available_chains}"
+                            f"Available chains: {available_chains}",
                         )
                 else:
                     chains_to_extract = available_chains
-                
-                # Extract sequences using processor's get_seq_dict method
-                processor.pdb_ids = [pdb_id]  # Set current PDB ID
-                seq_dict = processor.get_seq_dict()
-                
-                # Filter to requested chains
-                sequences = {}
-                for key, seq in seq_dict.items():
-                    pdb, chain = key.split('_')
-                    if pdb == pdb_id and chain in chains_to_extract:
-                        sequences[key] = seq
-                
+
+                sequences: Dict[str, str] = {}
+                for chain_id in chains_to_extract:
+                    payload = chain_payloads.get(chain_id)
+                    sequence = payload.get("sequence") if payload else None
+                    if not sequence:
+                        continue
+                    seq_name = payload.get("entity_name") or f"{pdb_id}_chain_{chain_id}"
+                    sequences[seq_name] = sequence
+
                 result = {
                     "pdb_id": pdb_id,
-                    "chains_extracted": list(set(k.split('_')[1] for k in sequences.keys())),
+                    "chains_extracted": chains_to_extract,
                     "sequences": sequences,
-                    "sequence_count": len(sequences)
+                    "sequence_count": len(sequences),
                 }
                 
                 # Save as FASTA if requested
                 if save_as_fasta and sequences:
                     try:
-                        # Get sequence processor
                         seq_processor = self.get_processor("sequence")
-                        
-                        # Save sequences using sequence processor
                         seq_processor.save_sequences(sequences, save_as_fasta)
-                        
                         result["saved_as"] = f"{save_as_fasta}.fasta"
                         result["message"] = f"Sequences saved to {save_as_fasta}.fasta"
-                    except Exception as e:
-                        result["save_error"] = str(e)
+                    except Exception as exc:
+                        result["save_error"] = str(exc)
                         result["message"] = "Sequences extracted but failed to save as FASTA"
                 
                 return self.format_success(result)
@@ -1402,7 +2641,7 @@ class StructureAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_all_chains_from_dataset(ctx, dataset_name: str,
+        def structure_extract_all_chains_from_dataset(ctx, dataset_name: str,
                                           save_as_fasta: Optional[str] = None,
                                           chain_filter: Optional[List[str]] = None) -> Dict:
             """
@@ -1431,63 +2670,41 @@ class StructureAnalysisTools(BaseTool):
                 # Get structure processor
                 processor = self.get_processor("structure")
                 
-                # Load dataset
-                dataset = processor.load_dataset(dataset_name)
-                if dataset is None:
-                    return self.format_error(
-                        f"Dataset '{dataset_name}' not found",
-                        "Check dataset name and ensure it exists"
-                    )
-                
-                # Get structure list from dataset
-                structures = dataset.content if hasattr(dataset, 'content') else dataset.get('content', [])
-                
+                structures = processor.get_dataset_entities(dataset_name)
+
                 if not structures:
                     return self.format_error(
-                        f"Dataset '{dataset_name}' is empty",
-                        "Dataset contains no structures"
+                        f"Dataset '{dataset_name}' has no registered structures",
+                        "Use the structure loader to populate the dataset first"
                     )
-                
-                # Extract sequences from all structures
+
+                collected = processor.collect_chain_sequences(
+                    structures,
+                    chain_filter=chain_filter,
+                )
+
                 all_sequences = {}
-                failed_structures = []
-                chain_stats = {}
-                
+                failed_structures: List[Dict[str, Any]] = []
+                chain_stats: Dict[str, int] = {}
+
                 for pdb_id in structures:
-                    try:
-                        # Load structure
-                        structure = processor.load_structure(pdb_id)
-                        if structure is None:
-                            raise ValueError(f"Could not load structure {pdb_id}")
-                            
-                        # Set data temporarily for get_seq_dict
-                        old_data = processor.data
-                        processor.data = structure
-                        processor.pdb_ids = [pdb_id]
-                        
-                        # Get sequences for this structure
-                        seq_dict = processor.get_seq_dict()
-                        
-                        # Restore original data
-                        processor.data = old_data
-                        
-                        # Filter chains if requested
-                        for key, seq in seq_dict.items():
-                            pdb, chain = key.split('_')
-                            if chain_filter is None or chain in chain_filter:
-                                all_sequences[key] = seq
-                                
-                                # Track statistics
-                                if chain not in chain_stats:
-                                    chain_stats[chain] = 0
-                                chain_stats[chain] += 1
-                                
-                    except Exception as e:
+                    chains = collected.get(pdb_id, {})
+                    if not chains:
                         failed_structures.append({
                             "pdb_id": pdb_id,
-                            "error": str(e)
+                            "error": "No extractable chains",
                         })
-                
+                        continue
+
+                    for chain_id, payload in chains.items():
+                        sequence_id = payload.get("entity_name") or f"{pdb_id}_chain_{chain_id}"
+                        sequence = payload.get("sequence")
+                        if not sequence:
+                            continue
+
+                        all_sequences[sequence_id] = sequence
+                        chain_stats[chain_id] = chain_stats.get(chain_id, 0) + 1
+
                 result = {
                     "dataset_name": dataset_name,
                     "total_structures": len(structures),
@@ -1500,26 +2717,25 @@ class StructureAnalysisTools(BaseTool):
                 # Save as FASTA if requested
                 if save_as_fasta and all_sequences:
                     try:
-                        # Get sequence processor
                         seq_processor = self.get_processor("sequence")
-                        
-                        # Save all sequences
-                        seq_processor.save_sequences(all_sequences, save_as_fasta)
-                        
-                        # Also create a sequence dataset
-                        seq_processor.create_dataset(
+                        metadata = {
+                            "source": f"structure_dataset:{dataset_name}",
+                            "chain_filter": chain_filter,
+                            "extraction_date": datetime.now().isoformat(),
+                        }
+                        seq_processor.save_sequences(
+                            all_sequences,
                             save_as_fasta,
-                            list(all_sequences.keys()),
-                            {
-                                "source": f"structure_dataset:{dataset_name}",
-                                "chain_filter": chain_filter,
-                                "extraction_date": datetime.now().isoformat()
-                            }
+                            dataset_name=save_as_fasta,
+                            metadata=metadata,
+                            materialize_entities=True,
                         )
-                        
+
                         result["saved_as"] = f"{save_as_fasta}.fasta"
                         result["sequence_dataset"] = save_as_fasta
-                        result["message"] = f"Sequences saved to {save_as_fasta}.fasta and dataset created"
+                        result["message"] = (
+                            f"Sequences saved to {save_as_fasta}.fasta and registered as dataset"
+                        )
                     except Exception as e:
                         result["save_error"] = str(e)
                         result["message"] = "Sequences extracted but failed to save"
@@ -1528,21 +2744,324 @@ class StructureAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
+
         @server.tool()
-        def get_sequences_and_save_fasta(ctx, pdb_ids: List[str],
-                                        fasta_name: str,
-                                        use_chain_dict: bool = True) -> Dict:
+        def structure_graph_generate_from_dataset(
+            ctx,
+            structure_dataset: str,
+            dataset_name: Optional[str] = None,
+            level: str = "atom",
+            cutoff: float = 5.0,
+            include_hydrogens: bool = False,
+        ) -> Dict:
+            """Generate graphs for each structure in a dataset using GraphProcessor."""
+
+            if error := self.validate_required_params(
+                {"structure_dataset": structure_dataset}, ["structure_dataset"]
+            ):
+                return error
+
+            graph_processor = self.get_processor("graph")
+
+            try:
+                dataset_id, entities = graph_processor.generate_graphs_from_dataset(
+                    structure_dataset=structure_dataset,
+                    dataset_name=dataset_name,
+                    level=level,
+                    cutoff=cutoff,
+                    include_hydrogens=include_hydrogens,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            return self.format_success(
+                {
+                    "structure_dataset": structure_dataset,
+                    "graph_dataset": dataset_id,
+                    "graph_entities": entities,
+                    "entity_count": len(entities),
+                    "metadata": {
+                        "level": level,
+                        "cutoff": cutoff,
+                        "include_hydrogens": include_hydrogens,
+                    },
+                },
+                message="Graph dataset generated",
+            )
+
+        @server.tool()
+        def structure_graph_load_entity(
+            ctx,
+            graph_name: str,
+            include_data: bool = False,
+            preview_nodes: int = 50,
+        ) -> Dict:
+            """Load a graph entity and summarize its contents."""
+
+            if error := self.validate_required_params(
+                {"graph_name": graph_name}, ["graph_name"]
+            ):
+                return error
+
+            processor = self.get_processor("graph")
+
+            try:
+                graph_payload = processor.load_graph(graph_name)
+            except FileNotFoundError:
+                return self.format_error(
+                    f"Graph '{graph_name}' not found",
+                    "Generate graphs first or verify the entity name.",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            metadata = graph_payload.get("graph_metadata", {})
+            node_count = metadata.get("node_count")
+            edge_count = metadata.get("edge_count")
+
+            response: Dict[str, Any] = {
+                "graph_name": graph_name,
+                "metadata": metadata,
+                "node_count": node_count,
+                "edge_count": edge_count,
+            }
+
+            if include_data:
+                data = graph_payload.get("graph")
+                if hasattr(data, "to_dict"):
+                    preview = data.to_dict()
+                else:
+                    preview = data
+
+                if isinstance(preview, dict) and "x" in preview:
+                    node_features = preview["x"]
+                    if hasattr(node_features, "detach"):
+                        node_features = node_features.detach().cpu()
+                    if hasattr(node_features, "numpy"):
+                        node_features = node_features.numpy()
+                    response["node_features_preview"] = node_features[:preview_nodes].tolist()
+
+                response["graph_data"] = preview
+
+            return self.format_success(response)
+
+        @server.tool()
+        def structure_filter_dataset(
+            ctx,
+            dataset_name: str,
+            filters: Optional[Dict[str, Any]] = None,
+            query: Optional[str] = None,
+            new_dataset_name: Optional[str] = None,
+            suffix: str = "_filtered",
+            register_filtered: bool = True,
+            drop_empty: bool = True,
+        ) -> Dict:
+            """Filter structures in a dataset by column values and optionally register the results."""
+
+            if error := self.validate_required_params(
+                {"dataset_name": dataset_name}, ["dataset_name"],
+            ):
+                return error
+
+            if filters is not None and not isinstance(filters, dict):
+                return self.format_error(
+                    "Invalid filters payload",
+                    "Provide a mapping of column names to single values or lists of values.",
+                )
+
+            processor = self.get_processor("structure")
+            manager = processor.dataset_manager
+
+            if not manager.dataset_exists(dataset_name):
+                return self.format_error(
+                    f"Structure dataset '{dataset_name}' not found",
+                    "Use the structure loader tools to populate it first.",
+                )
+
+            structure_ids = manager.get_dataset_entities(dataset_name)
+            if not structure_ids:
+                return self.format_error(
+                    f"Dataset '{dataset_name}' has no registered structures",
+                    "Add structures before applying filters.",
+                )
+
+            target_dataset = (
+                new_dataset_name or f"{dataset_name}{suffix}"
+                if register_filtered
+                else dataset_name
+            )
+
+            summaries: List[Dict[str, Any]] = []
+            filtered_entities: List[str] = []
+            failures: List[Dict[str, Any]] = []
+
+            for structure_id in structure_ids:
+                target_id = f"{structure_id}{suffix}" if register_filtered else structure_id
+
+                try:
+                    filtered_df = processor.filter_structure(
+                        structure_id,
+                        filters=filters,
+                        query=query,
+                        new_id=target_id,
+                        register=register_filtered,
+                        metadata={
+                            "source_structure": structure_id,
+                            "filters": filters,
+                            "query": query,
+                        }
+                        if register_filtered
+                        else None,
+                    )
+                except ValueError as exc:
+                    if drop_empty:
+                        failures.append(
+                            {
+                                "structure_id": structure_id,
+                                "error": str(exc),
+                            }
+                        )
+                        continue
+                    filtered_df = None
+                except Exception as exc:  # noqa: BLE001
+                    failures.append(
+                        {
+                            "structure_id": structure_id,
+                            "error": str(exc),
+                        }
+                    )
+                    continue
+
+                if filtered_df is None:
+                    continue
+
+                filtered_entities.append(target_id)
+                summaries.append(
+                    {
+                        "structure_id": structure_id,
+                        "filtered_structure": target_id,
+                        "atom_count": int(len(filtered_df)),
+                    }
+                )
+
+            if register_filtered and filtered_entities:
+                metadata = {
+                    "source_dataset": dataset_name,
+                    "filters": filters,
+                    "query": query,
+                    "entity_count": len(filtered_entities),
+                }
+                if manager.dataset_exists(target_dataset):
+                    manager.delete_dataset(target_dataset)
+                processor.create_dataset(target_dataset, filtered_entities, metadata)
+
+            if not filtered_entities:
+                return self.format_error(
+                    "No structures passed the filter",
+                    "Adjust the filters or disable drop_empty to keep empty results.",
+                )
+
+            return self.format_success(
+                {
+                    "source_dataset": dataset_name,
+                    "filtered_dataset": target_dataset if register_filtered else None,
+                    "filtered_count": len(filtered_entities),
+                    "filtered_entities": filtered_entities,
+                    "summaries": summaries,
+                    "failures": failures,
+                    "filters": filters,
+                    "query": query,
+                    "registered": register_filtered,
+                },
+                message="Structure dataset filtered",
+            )
+
+        @server.tool()
+        def structure_register_chain_sequences_from_dataset(
+            ctx,
+            dataset_name: str,
+            dataset_prefix: Optional[str] = None,
+            chain_filter: Optional[Union[List[str], Dict[str, List[str]], str]] = None,
+            create_dataset: bool = True,
+            overwrite: bool = False,
+            min_length: int = 1,
+            one_letter: bool = True,
+        ) -> Dict:
+            """Register per-chain sequences for all structures in a dataset."""
+
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name},
+                    ["dataset_name"],
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+
+                structures = processor.get_dataset_entities(dataset_name)
+                if not structures:
+                    return self.format_error(
+                        f"Dataset '{dataset_name}' has no registered structures",
+                        "Use the structure loaders to populate it first",
+                    )
+
+                summary = processor.register_chain_sequences(
+                    structures,
+                    chain_filter=chain_filter,
+                    one_letter=one_letter,
+                    min_length=min_length,
+                    dataset_prefix=dataset_prefix,
+                    create_dataset=create_dataset,
+                    overwrite=overwrite,
+                )
+
+                total_sequences = 0
+                registered_entities: List[str] = []
+                created_datasets: Dict[str, Optional[str]] = {}
+
+                for struct_id, payload in summary.items():
+                    chains = payload.get("chains", {})
+                    total_sequences += len(chains)
+                    created_datasets[struct_id] = payload.get("dataset")
+                    registered_entities.extend(payload.get("registered_entities", []))
+
+                return self.format_success(
+                    {
+                        "dataset_name": dataset_name,
+                        "structures": structures,
+                        "total_sequences": total_sequences,
+                        "registered_entities": registered_entities,
+                        "structure_datasets": created_datasets,
+                        "create_dataset": create_dataset,
+                        "overwrite": overwrite,
+                        "chain_filter": chain_filter,
+                        "one_letter": one_letter,
+                        "min_length": min_length,
+                    }
+                )
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+        @server.tool()
+        def structure_get_sequences_and_save_fasta(
+            ctx,
+            pdb_ids: List[str],
+            fasta_name: str,
+            use_chain_dict: bool = True,
+        ) -> Dict:
             """
             Extract sequences from structures using get_seq_dict/get_chain_dict and save as FASTA.
             
-            This is a simple tool that loads structures, calls get_seq_dict() or get_chain_dict()
-            on the structure processor, and saves the results as a FASTA file using the 
-            sequence processor.
-            
+            This helper collects chain sequences for the provided structures and
+            saves them as a FASTA file using the sequence processor. The
+            `use_chain_dict` flag is kept for backward compatibility but no
+            longer changes behaviour (chain extraction always uses the unified
+            `collect_chain_sequences`).
+
             Args:
                 pdb_ids: List of PDB IDs to process
                 fasta_name: Name for the output FASTA file (without extension)
-                use_chain_dict: If True, use get_chain_dict(); if False, use get_seq_dict()
+                use_chain_dict: Deprecated; retained for backwards compatibility
                 
             Returns:
                 Dictionary with extraction results
@@ -1561,38 +3080,35 @@ class StructureAnalysisTools(BaseTool):
                         "Provide at least one PDB ID"
                     )
                 
-                # Get structure processor
                 struct_processor = self.get_processor("structure")
-                
-                # Load all structures
-                struct_processor.load_structures(pdb_ids)
-                
-                # Set the PDB IDs for processing
-                struct_processor.pdb_ids = pdb_ids
-                
-                # Get sequences using the appropriate method
-                if use_chain_dict:
-                    sequences = struct_processor.get_chain_dict()
-                else:
-                    sequences = struct_processor.get_seq_dict()
-                
+                collected = struct_processor.collect_chain_sequences(pdb_ids)
+
+                sequences: Dict[str, str] = {}
+                for pdb_id, chains in collected.items():
+                    for chain_id, payload in chains.items():
+                        sequence = payload.get("sequence")
+                        if not sequence:
+                            continue
+                        seq_name = payload.get("entity_name") or f"{pdb_id}_chain_{chain_id}"
+                        sequences[seq_name] = sequence
+
                 if not sequences:
                     return self.format_error(
                         "No sequences extracted",
-                        "Check that structures contain protein chains"
+                        "Check that the supplied structures contain protein chains",
                     )
-                
+
                 # Get sequence processor and save as FASTA
                 seq_processor = self.get_processor("sequence")
                 seq_processor.save_sequences(sequences, fasta_name)
-                
+
                 # Create a sequence dataset
                 seq_processor.create_dataset(
                     fasta_name,
                     list(sequences.keys()),
                     {
                         "source_structures": pdb_ids,
-                        "extraction_method": "get_chain_dict" if use_chain_dict else "get_seq_dict",
+                        "extraction_method": "collect_chain_sequences",
                         "total_sequences": len(sequences)
                     }
                 )

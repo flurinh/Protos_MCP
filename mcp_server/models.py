@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 # --- Define our own simple Message and Role structures ---
-# These are not from mcp.model.schemas, as that path does not exist in the SDK.
+# These are not from mcp.models.schemas, as that path does not exist in the SDK.
 
 # Using Literal for type hinting roles, or a simple Enum
 RoleType = Literal["user", "assistant", "system", "tool"] # "tool" if you might need it
@@ -38,7 +38,7 @@ class MCPModelBase(ABC):
     def __init__(self, model_id: str, **kwargs):
         self.model_id = model_id
         self._is_initialized = False
-        print(f"MCPModelBase: Initializing model with id='{model_id}'")
+        print(f"MCPModelBase: Initializing models with id='{model_id}'")
 
     @abstractmethod
     async def generate_response_async(
@@ -136,7 +136,7 @@ class OllamaMCPModel(MCPModelBase):
         ollama_request_params = {**self.default_params, **request_specific_params}
 
         payload = {
-            "model": self.ollama_model_name,
+            "models": self.ollama_model_name,
             "messages": ollama_messages,
             "stream": False,
             "options": ollama_request_params
@@ -230,7 +230,7 @@ class ClaudeMCPModel(MCPModelBase):
         #
         # try:
         # api_response = await self._client.messages.create(
-        # model=self.claude_model_name,
+        # models=self.claude_model_name,
         # system=system_prompt_content,
         # messages=anthropic_messages,
         # max_tokens=kwargs.get("max_tokens", 1024),
@@ -243,5 +243,5 @@ class ClaudeMCPModel(MCPModelBase):
 
         return {
             "role": InternalRole.ASSISTANT.value,
-            "content": f"Claude model response (id: {self.model_id}) would appear here. Input: {len(messages)} messages. This is a placeholder."
+            "content": f"Claude models response (id: {self.model_id}) would appear here. Input: {len(messages)} messages. This is a placeholder."
         }

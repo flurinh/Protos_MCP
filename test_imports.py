@@ -21,28 +21,28 @@ except ImportError as e:
 
 # Test Protos imports
 try:
-    from protos.io.paths import ProtosPaths
-    print("✓ ProtosPaths import successful")
+    from protos.io.paths import get_protos_paths, reset_protos_data
+    print("✓ Path management helpers import successful")
 except ImportError as e:
-    print(f"✗ ProtosPaths import failed: {e}")
+    print(f"✗ Path helpers import failed: {e}")
 
 try:
-    from protos.io.entity_registry import EntityRegistry
-    print("✓ EntityRegistry import successful")
+    from protos.io.core import BaseProcessor, get_registry, reset_registry
+    print("✓ Core registry helpers import successful")
 except ImportError as e:
-    print(f"✗ EntityRegistry import failed: {e}")
-
-try:
-    from protos.core.base_processor import BaseProcessor
-    print("✓ BaseProcessor import successful")
-except ImportError as e:
-    print(f"✗ BaseProcessor import failed: {e}")
+    print(f"✗ Core registry helpers import failed: {e}")
 
 try:
     from protos.processing.structure import StructureProcessor
     print("✓ StructureProcessor import successful")
 except ImportError as e:
     print(f"✗ StructureProcessor import failed: {e}")
+
+try:
+    from mcp_server.runtime import create_server
+    print("✓ MCP runtime import successful")
+except ImportError as e:
+    print(f"✗ MCP runtime import failed: {e}")
 
 print("\n--- Testing data directory ---")
 import os

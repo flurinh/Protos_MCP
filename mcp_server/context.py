@@ -7,9 +7,9 @@ ProtosPaths, EntityRegistry, processors, and configuration.
 
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Union
 
 # Add protos to path if needed
 protos_path = Path(__file__).parent.parent / "protos" / "src"
@@ -17,9 +17,9 @@ if protos_path.exists() and str(protos_path) not in sys.path:
     sys.path.insert(0, str(protos_path))
 
 try:
-    from protos.io.paths import ProtosPaths
-    from protos.io.entity_registry import EntityRegistry
-    from protos.core.base_processor import BaseProcessor
+    import protos
+    from protos.io.paths import ProtosPaths, get_protos_paths, reset_protos_data
+    from protos.io.core import BaseProcessor, EntityRegistry, get_registry
 except ImportError as e:
     print(f"Error importing Protos: {e}", file=sys.stderr)
     print(f"Attempted to import from: {protos_path}", file=sys.stderr)
@@ -31,55 +31,106 @@ from .core.exceptions import ProcessorInitializationError
 
 @dataclass
 class ServerContext:
-    """Central server state management."""
-    
-    paths: ProtosPaths
-    entity_registry: EntityRegistry
-    processors: Dict[str, BaseProcessor]
+    """Central server state management with lazy Protos initialization."""
+
     config: ServerConfig
-    
+    processors: Dict[str, BaseProcessor] = field(default_factory=dict)
+    _paths: Optional[ProtosPaths] = field(default=None, init=False, repr=False)
+    _entity_registry: Optional[EntityRegistry] = field(default=None, init=False, repr=False)
+    _protos_ready: bool = field(default=False, init=False, repr=False)
+
     @classmethod
-    def initialize(cls, config: Optional[ServerConfig] = None) -> 'ServerContext':
-        """Initialize all core components."""
+    def initialize(cls, config: Optional[ServerConfig] = None) -> "ServerContext":
+        """Prepare a server context without touching the filesystem."""
+
         if config is None:
             config = ServerConfig()
-        
-        # Set environment variables for Protos
-        os.environ["PROTOS_DATA_ROOT"] = str(config.data_root.absolute())
-        os.environ["PROTOS_REF_DATA_ROOT"] = str(config.data_root.absolute())
-        
-        print(f"Initializing ServerContext with data root: {config.data_root}", file=sys.stderr)
-        
+
+        context = cls(config=config)
+        context._apply_environment()
+
+        print(
+            f"ServerContext created with data root: {context.config.data_root} (lazy initialization)",
+            file=sys.stderr,
+        )
+
+        return context
+
+    def _apply_environment(self) -> None:
+        """Propagate the configured data root to environment variables."""
+
+        absolute_root = self.config.data_root
+        os.environ["PROTOS_DATA_ROOT"] = str(absolute_root)
+        os.environ["PROTOS_REF_DATA_ROOT"] = str(absolute_root)
+
+    def ensure_protos_ready(self) -> None:
+        """Materialize Protos singletons on first use."""
+
+        if self._protos_ready:
+            return
+
         try:
-            # Initialize ProtosPaths
-            paths = ProtosPaths(
-                data_root=str(config.data_root.absolute())
+            print(
+                f"Initializing Protos subsystem at: {self.config.data_root}",
+                file=sys.stderr,
             )
-            
-            # Initialize EntityRegistry
-            entity_registry = EntityRegistry(paths=paths)
-            
-            # Create context
-            context = cls(
-                paths=paths,
-                entity_registry=entity_registry,
-                processors={},
-                config=config
-            )
-            
-            print(f"ServerContext initialized successfully", file=sys.stderr)
-            return context
-            
-        except Exception as e:
+
+            protos.set_data_path(str(self.config.data_root))
+            self._paths = get_protos_paths()
+            self._entity_registry = get_registry()
+
+            self._protos_ready = True
+
+        except Exception as exc:  # noqa: BLE001
             raise ProcessorInitializationError(
                 "ServerContext",
-                f"Failed to initialize core components: {str(e)}"
+                f"Failed to initialize core components: {exc}"
+            ) from exc
+
+    @property
+    def paths(self) -> ProtosPaths:
+        """Access ProtosPaths, triggering lazy initialization if needed."""
+
+        self.ensure_protos_ready()
+        assert self._paths is not None  # For type checkers; ensure_protos_ready guards this
+        return self._paths
+
+    @property
+    def entity_registry(self) -> EntityRegistry:
+        """Access EntityRegistry, triggering lazy initialization if needed."""
+
+        self.ensure_protos_ready()
+        assert self._entity_registry is not None
+        return self._entity_registry
+
+    @property
+    def is_protos_ready(self) -> bool:
+        """Whether Protos has been initialized for this context."""
+
+        return self._protos_ready
+
+    def update_data_root(self, new_root: Union[str, Path]) -> None:
+        """Reconfigure the data root before any Protos initialization occurs."""
+
+        if self._protos_ready or self.processors:
+            raise RuntimeError(
+                "Cannot change Protos data root after initialization. Restart the server to apply a new path."
             )
-    
+
+        self.config.set_data_root(new_root)
+        self._apply_environment()
+
+        # Ensure any pre-initialized handles are cleared
+        self._paths = None
+        self._entity_registry = None
+        self._protos_ready = False
+        self.clear_processor_cache()
+
+
     def get_processor(self, processor_type: str) -> Optional[BaseProcessor]:
         """Get processor instance from cache."""
         return self.processors.get(processor_type)
-    
+
     def set_processor(self, processor_type: str, processor: BaseProcessor):
         """Store processor instance in cache."""
         self.processors[processor_type] = processor
@@ -90,9 +141,41 @@ class ServerContext:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get server statistics."""
-        return {
+        stats = {
             "data_root": str(self.config.data_root),
             "cached_processors": list(self.processors.keys()),
             "cache_enabled": self.config.cache_enabled,
-            "entity_count": len(self.entity_registry.list_entities()) if hasattr(self.entity_registry, 'list_entities') else 0
+            "initialized": self._protos_ready,
+            "data_root_exists": self.config.data_root.exists(),
+            "entity_count": 0,
         }
+
+        if self._entity_registry and hasattr(self._entity_registry, "list_entities"):
+            try:
+                stats["entity_count"] = len(self._entity_registry.list_entities())
+            except Exception:  # noqa: BLE001
+                stats["entity_count"] = -1
+
+        return stats
+
+    def reset_data(
+        self,
+        *,
+        wipe: bool = False,
+        backup_registry: bool = True,
+        reinstall_reference: bool = True,
+    ):
+        """Reset the shared Protos data root and registry."""
+
+        self.ensure_protos_ready()
+
+        reset_protos_data(
+            wipe=wipe,
+            backup_registry=backup_registry,
+            reinstall_reference=reinstall_reference,
+        )
+
+        # Refresh cached handles after reset
+        self._paths = get_protos_paths()
+        self._entity_registry = get_registry()
+        self.clear_processor_cache()

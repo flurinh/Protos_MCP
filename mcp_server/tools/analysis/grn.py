@@ -438,7 +438,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -536,7 +536,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -715,7 +715,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -885,7 +885,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -994,12 +994,12 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_structures(ctx, dataset_name: str,
+        def grn_extract_sequences_from_structures(ctx, dataset_name: str,
                                             chain_selection: Optional[str] = "all") -> Dict:
             """
             Extract amino acid sequences from a structure dataset (deprecated).
             
-            Note: Use extract_sequences_from_dataset for improved functionality.
+            Note: Use grn_extract_sequences_from_dataset for improved functionality.
             
             Args:
                 dataset_name: Name of the structure dataset
@@ -1044,7 +1044,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -1142,7 +1142,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -1321,7 +1321,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -1491,7 +1491,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -1600,14 +1600,14 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_sequences_to_reference(ctx, query_sequences: Dict[str, str],
+        def grn_align_sequences_to_reference(ctx, query_sequences: Dict[str, str],
                                        reference_name: str,
                                        min_identity: float = 0.25,
                                        alignment_method: str = "mmseqs2") -> Dict:
             """
             Align query sequences to a GRN reference database using raw sequences.
             
-            Note: For dataset-based alignment, use align_dataset_to_reference instead.
+            Note: For dataset-based alignment, use grn_align_dataset_to_reference instead.
             
             Args:
                 query_sequences: Dictionary mapping sequence IDs to sequences (raw strings)
@@ -1703,7 +1703,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -1801,7 +1801,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -1980,7 +1980,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -2150,7 +2150,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -2267,7 +2267,7 @@ class GRNAnalysisTools(BaseTool):
             Assign GRN positions to aligned sequences.
             
             Args:
-                sequence_alignments: Alignment results from align_sequences_to_reference
+                sequence_alignments: Alignment results from grn_align_sequences_to_reference
                 reference_name: Name of the reference table used
                 protein_family: Protein family for GRN configuration
                 expand_annotation: Whether to expand annotations to fill gaps
@@ -2286,7 +2286,7 @@ class GRNAnalysisTools(BaseTool):
                 if not sequence_alignments:
                     return self.format_error(
                         "No alignments provided",
-                        "First run align_sequences_to_reference"
+                        "First run grn_align_sequences_to_reference"
                     )
                 
                 # Get GRN processor
@@ -2338,7 +2338,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -2436,7 +2436,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -2615,7 +2615,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -2785,7 +2785,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -2894,7 +2894,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def create_grn_table(ctx, grn_assignments: Dict[str, Dict],
+        def grn_create_table(ctx, grn_assignments: Dict[str, Dict],
                            dataset_name: str,
                            normalize_formats: bool = True) -> Dict:
             """
@@ -2966,7 +2966,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -3064,7 +3064,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -3243,7 +3243,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -3413,7 +3413,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -3522,7 +3522,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def get_grn_coverage_stats(ctx, dataset_name: str) -> Dict:
+        def grn_get_coverage_stats(ctx, dataset_name: str) -> Dict:
             """
             Calculate coverage statistics for a GRN table.
             
@@ -3590,7 +3590,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -3688,7 +3688,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -3867,7 +3867,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -4037,7 +4037,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
@@ -4146,7 +4146,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def get_grn_config(ctx, protein_family: str = "gpcr_a",
+        def grn_get_config(ctx, protein_family: str = "gpcr_a",
                           strict: bool = False) -> Dict:
             """
             Get GRN configuration for a protein family.
@@ -4192,7 +4192,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def extract_sequences_from_dataset(ctx, dataset_name: str,
+        def grn_extract_sequences_from_dataset(ctx, dataset_name: str,
                                          processor_type: str = "structure",
                                          chain_selection: Optional[str] = None) -> Dict:
             """
@@ -4290,7 +4290,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def align_dataset_to_reference(ctx, dataset_name: str,
+        def grn_align_dataset_to_reference(ctx, dataset_name: str,
                                      reference_name: str,
                                      min_identity: float = 0.25,
                                      alignment_method: str = "mmseqs2") -> Dict:
@@ -4469,7 +4469,7 @@ class GRNAnalysisTools(BaseTool):
                     best_matches = self._temp_alignments
                 else:
                     # Perform alignment
-                    align_result = align_dataset_to_reference(
+                    align_result = grn_align_dataset_to_reference(
                         ctx, dataset_name, reference_name, 
                         min_identity=0.25, alignment_method="mmseqs2"
                     )
@@ -4639,7 +4639,7 @@ class GRNAnalysisTools(BaseTool):
                 return self.handle_error(e)
         
         @server.tool()
-        def compare_grn_conservation(ctx, grn_table: str,
+        def grn_compare_conservation(ctx, grn_table: str,
                                    entity_group1: List[str],
                                    entity_group2: List[str],
                                    min_conservation: float = 0.8) -> Dict:
