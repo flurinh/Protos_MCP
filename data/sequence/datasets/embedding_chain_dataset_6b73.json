@@ -1,0 +1,24 @@
+{
+  "name": "embedding_chain_dataset_6b73",
+  "processor_type": "sequence",
+  "entities": [
+    "6b73_chain_A",
+    "6b73_chain_B",
+    "6b73_chain_C",
+    "6b73_chain_D"
+  ],
+  "entity_ids": [
+    "fb3ec411-2536-41a0-bf60-68d9f8b3e4f4",
+    "3ce9423b-f131-438d-b22c-562607c88b7e",
+    "91cec84c-2031-4f23-998d-eca36dee75b3",
+    "36033855-2e0c-4b23-ab9d-2621d2afb9fa"
+  ],
+  "metadata": {
+    "structure_id": "6b73",
+    "semantic_role": "chain_sequence",
+    "chain_count": 4,
+    "size": 4
+  },
+  "created": "2025-11-12T14:17:50.138064",
+  "modified": "2025-11-12T14:17:50.138074"
+}

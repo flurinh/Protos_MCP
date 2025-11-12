@@ -16,28 +16,25 @@ if protos_path.exists() and str(protos_path) not in sys.path:
 
 try:
     from protos.io.core import BaseProcessor
-    from protos.processing.structure import StructureProcessor
-    from protos.processing.sequence import SequenceProcessor
-    from protos.processing.grn import GRNProcessor
-    from protos.processing.property import PropertyProcessor
-    from protos.processing.embedding import EmbeddingProcessor
-    from protos.processing.molecule import MoleculeProcessor
-    # Note: Graph processor may not exist, handle gracefully
-    try:
-        from protos.processing.graph import GraphProcessor
-    except ImportError:
-        GraphProcessor = None
-except ImportError as e:
-    print(f"Error importing Protos processors: {e}", file=sys.stderr)
-    # Define placeholder classes for type hints
+except ImportError as e:  # pragma: no cover - catastrophic import failure
+    print(f"Error importing Protos base processor: {e}", file=sys.stderr)
     BaseProcessor = object
-    StructureProcessor = None
-    SequenceProcessor = None
-    GRNProcessor = None
-    PropertyProcessor = None
-    EmbeddingProcessor = None
-    MoleculeProcessor = None
-    GraphProcessor = None
+
+def _safe_import(module: str, attr: str):
+    try:
+        mod = __import__(module, fromlist=[attr])
+        return getattr(mod, attr)
+    except ImportError:
+        return None
+
+
+StructureProcessor = _safe_import("protos.processing.structure", "StructureProcessor")
+SequenceProcessor = _safe_import("protos.processing.sequence", "SequenceProcessor")
+GRNProcessor = _safe_import("protos.processing.grn", "GRNProcessor")
+PropertyProcessor = _safe_import("protos.processing.property", "PropertyProcessor")
+EmbeddingProcessor = _safe_import("protos.processing.embedding", "EmbeddingProcessor")
+MoleculeProcessor = _safe_import("protos.processing.molecule", "MoleculeProcessor")
+GraphProcessor = _safe_import("protos.processing.graph", "GraphProcessor")
 
 from ..core.exceptions import ProcessorNotFoundError, ProcessorInitializationError
 

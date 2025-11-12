@@ -6,13 +6,16 @@ common functionality like error handling, response formatting, and
 processor access.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Iterable
 from abc import ABC
+import inspect
 import traceback
 
 from ..core.protos_manager import ProtosManager
 from ..core.processor_factory import ProcessorFactory
 from ..core.exceptions import ProtosMCPError, InvalidInputError
+from ..core.session import SessionState
+from ..core.tool_catalog import ToolCatalog
 
 
 class BaseTool(ABC):
@@ -39,7 +42,19 @@ class BaseTool(ABC):
         """Lazy access to the EntityRegistry via the shared context."""
 
         return self.context.entity_registry
-    
+
+    @property
+    def session(self) -> SessionState:
+        """Convenience accessor for the shared session state."""
+
+        return self.context.session
+
+    @property
+    def tool_catalog(self) -> ToolCatalog:
+        """Access the shared tool catalog."""
+
+        return self.context.tool_catalog
+
     def get_processor(self, processor_type: str):
         """
         Get processor instance from context.
@@ -51,6 +66,97 @@ class BaseTool(ABC):
             Processor instance
         """
         return self.manager.get_processor(processor_type)
+
+    # Session helpers --------------------------------------------------
+
+    def record_session_artifact(
+        self,
+        *,
+        tool_name: str,
+        name: str,
+        kind: str,
+        processor_type: Optional[str] = None,
+        summary: Optional[Dict[str, Any]] = None,
+        tags: Optional[Iterable[str]] = None,
+        handle: Optional[str] = None,
+        label: Optional[str] = None,
+        scope: Optional[str] = None,
+        activate: bool = True,
+    ) -> str:
+        """Record a session artifact and return its handle."""
+
+        artifact = self.session.record_artifact(
+            name=name,
+            kind=kind,
+            processor_type=processor_type,
+            summary=summary,
+            tags=tags,
+            source_tool=tool_name,
+            handle=handle,
+            label=label,
+            scope=scope,
+            activate=activate,
+        )
+        return artifact.handle
+
+    def record_session_event(
+        self,
+        *,
+        tool_name: str,
+        action: str,
+        details: Optional[Dict[str, Any]] = None,
+        handle: Optional[str] = None,
+    ) -> None:
+        """Store a history entry in the session state."""
+
+        self.session.record_event(
+            tool_name=tool_name,
+            action=action,
+            details=details,
+            handle=handle,
+        )
+
+    # Tool metadata helpers --------------------------------------------
+
+    @property
+    def catalog_group(self) -> str:
+        """Default metadata group name applied to registered tools."""
+
+        return self.__class__.__name__.replace("Tools", "").lower() or "general"
+
+    def register_tool_metadata(
+        self,
+        *,
+        function,
+        name: Optional[str] = None,
+        group: Optional[str] = None,
+        description: Optional[str] = None,
+        parameters: Optional[List[Dict[str, Any]]] = None,
+        returns: Optional[Dict[str, Any]] = None,
+        aliases: Optional[List[str]] = None,
+        deprecated: bool = False,
+        tags: Optional[List[str]] = None,
+        notes: Optional[str] = None,
+    ) -> None:
+        """Register metadata for a tool function in the catalog."""
+
+        func_name = name or getattr(function, "__name__", None)
+        if not func_name:
+            return
+
+        doc = description or inspect.getdoc(function) or ""
+        metadata = {
+            "name": func_name,
+            "group": group or self.catalog_group,
+            "description": doc,
+            "parameters": parameters or [],
+            "returns": returns or {},
+            "aliases": aliases or [],
+            "deprecated": deprecated,
+            "tags": tags or [],
+            "notes": notes,
+        }
+        self.tool_catalog.register(**metadata)
     
     def format_success(self, 
                       data: Any, 

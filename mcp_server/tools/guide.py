@@ -7,16 +7,27 @@ data management principles, and providing workflow examples.
 
 from typing import Dict, List, Optional, Any
 import json
+from pathlib import Path
+
+import yaml
 
 from .base import BaseTool
 
 
 class ProtoGuideTools(BaseTool):
     """Interactive guide and helper tools for Protos workflows."""
-    
+
+    def __init__(self, context):
+        super().__init__(context)
+        self._tool_usage_cache: Optional[Dict[str, Any]] = None
+
+    @property
+    def catalog_group(self) -> str:  # noqa: D401 - inherited docs adequate
+        return "guide"
+
     def register(self, server):
         """Register guide tools with the server."""
-        
+
         @server.tool()
         def protos_guide(ctx, topic: Optional[str] = None) -> Dict:
             """
@@ -42,22 +53,32 @@ class ProtoGuideTools(BaseTool):
                 "data_management": self._get_data_management_guide(),
                 "entity_registry": self._get_entity_registry_guide(),
                 "workflows": self._get_workflows_guide(),
-                "best_practices": self._get_best_practices_guide()
+                "best_practices": self._get_best_practices_guide(),
+                "tools": self._get_tool_catalog_guide(),
+                "grn_annotation": self._get_grn_annotation_guide(),
             }
-            
+
             if topic and topic in guides:
                 return self.format_success({
                     "topic": topic,
                     "content": guides[topic],
                     "related_topics": [t for t in guides.keys() if t != topic]
                 })
-            
+
             # Return topic list if no specific topic requested
             return self.format_success({
                 "available_topics": list(guides.keys()),
                 "description": "Use protos_guide with a specific topic for detailed information",
                 "quick_start": self._get_quick_start()
             })
+        self.register_tool_metadata(
+            function=protos_guide,
+            name="protos_guide",
+            description="Interactive guidance on Protos processors, data management, and workflows.",
+            parameters=[{"name": "topic", "type": "str", "optional": True}],
+            returns={"fields": ["available_topics", "content"]},
+            tags=["guide"],
+        )
         
         @server.tool()
         def guide_workflow_example(ctx, workflow_type: str) -> Dict:
@@ -98,6 +119,14 @@ class ProtoGuideTools(BaseTool):
                 "steps": workflows[workflow_type],
                 "tips": self._get_workflow_tips(workflow_type)
             })
+        self.register_tool_metadata(
+            function=guide_workflow_example,
+            name="guide_workflow_example",
+            description="Retrieve MCP-tool equivalents for canonical Protos workflows.",
+            parameters=[{"name": "workflow_type", "type": "str"}],
+            returns={"fields": ["steps"]},
+            tags=["guide", "workflow"],
+        )
         
         @server.tool()
         def guide_explain_concept(ctx, concept: str) -> Dict:
@@ -137,7 +166,77 @@ class ProtoGuideTools(BaseTool):
                 "concept": concept,
                 "explanation": concepts[concept]
             })
-    
+        self.register_tool_metadata(
+            function=guide_explain_concept,
+            name="guide_explain_concept",
+            description="Explain a Protos concept (entity, processor, dataset, etc.).",
+            parameters=[{"name": "concept", "type": "str"}],
+            returns={"fields": ["explanation"]},
+            tags=["guide", "concept"],
+        )
+
+        @server.tool()
+        def guide_tool_help(ctx, tool_name: Optional[str] = None) -> Dict:
+            """Return usage guidance for a specific MCP tool from tool_usage.yaml."""
+
+            usage = self._load_tool_usage()
+            if not usage:
+                return self.format_error(
+                    "No tool usage metadata available",
+                    "Populate mcp_server/tool_usage.yaml to enable this helper.",
+                )
+
+            if not tool_name:
+                return self.format_success({"tools": sorted(usage.keys())})
+
+            lookup = tool_name.lower()
+            key = next((name for name in usage if name.lower() == lookup), None)
+
+            if key is None:
+                matches = [name for name in usage if lookup in name.lower()]
+                suggestion = (
+                    f"Available tools: {', '.join(sorted(usage.keys()))}"
+                    if not matches
+                    else f"Did you mean: {', '.join(matches)}?"
+                )
+                return self.format_error(
+                    f"Unknown tool '{tool_name}'",
+                    suggestion,
+                )
+
+            entry = usage.get(key, {})
+            payload = {"tool": key, **entry}
+            return self.format_success(payload)
+
+        self.register_tool_metadata(
+            function=guide_tool_help,
+            name="guide_tool_help",
+            description="Surface enriched usage notes for a tool (parsed from tool_usage.yaml).",
+            parameters=[{"name": "tool_name", "type": "str", "optional": True}],
+            returns={"fields": ["summary", "workflows"]},
+            tags=["guide", "tools"],
+        )
+
+    def _load_tool_usage(self) -> Dict[str, Any]:
+        if self._tool_usage_cache is not None:
+            return self._tool_usage_cache
+
+        usage_path = Path(__file__).resolve().parents[1] / "tool_usage.yaml"
+        if not usage_path.exists():
+            self._tool_usage_cache = {}
+            return self._tool_usage_cache
+
+        try:
+            data = yaml.safe_load(usage_path.read_text()) or {}
+        except yaml.YAMLError:
+            data = {}
+
+        if not isinstance(data, dict):
+            data = {}
+
+        self._tool_usage_cache = {str(key): value for key, value in data.items() if isinstance(key, str)}
+        return self._tool_usage_cache
+
     def _get_overview_guide(self) -> Dict:
         """Get overview guide content."""
         return {
@@ -193,7 +292,7 @@ class ProtoGuideTools(BaseTool):
                         "structure_export_entity",
                         "structure_export_dataset",
                     ],
-                    "loaders": ["structure_download", "structure_download_batch"],
+                    "loaders": ["download_entity", "download_entities", "download_sources"],
                 },
                 "sequence": {
                     "handles": "Protein / DNA / RNA sequences",
@@ -215,7 +314,13 @@ class ProtoGuideTools(BaseTool):
                         "sequence_export_dataset",
                         "sequence_export_entity",
                     ],
-                    "loaders": ["sequence_download", "sequence_download_dataset", "sequence_register_records"],
+                    "loaders": [
+                        "download_entity",
+                        "download_entities",
+                        "download_sources",
+                        "sequence_download",
+                        "sequence_register_records",
+                    ],
                 },
                 "molecule": {
                     "handles": "Small-molecule ligands",
@@ -329,6 +434,23 @@ class ProtoGuideTools(BaseTool):
                 "description": "These helpers copy the embedded reference datasets into the current data root and register them with the appropriate processor."
             }
         }
+
+    def _get_tool_catalog_guide(self) -> Dict[str, Any]:
+        """Summarise tools registered in the shared catalog."""
+
+        catalog = self.tool_catalog
+        groups = catalog.list_groups()
+        counts = {group: len(names) for group, names in groups.items()}
+        highlight = {
+            group: names[:6] for group, names in groups.items()
+        }
+        return {
+            "title": "Tool Catalog",
+            "description": "Automatically generated map of MCP tools grouped by their domain.",
+            "group_counts": counts,
+            "sample_tools": highlight,
+            "usage": "Use context_status and context_list to inspect artifacts after each tool call; combine loaders with dataset operations for reproducible workflows.",
+        }
     
     def _get_entity_registry_guide(self) -> Dict:
         """Get entity registry guide content."""
@@ -358,6 +480,44 @@ class ProtoGuideTools(BaseTool):
                 "entity_info": "Get comprehensive information about an entity"
             }
         }
+
+    def _get_grn_annotation_guide(self) -> Dict[str, Any]:
+        """Provide a focused guide on sequence/structure GRN annotation."""
+
+        return {
+            "title": "GRN Annotation Workflow",
+            "description": "How to extract chains, align them to references, annotate with GRN, and project results back onto structures.",
+            "atomic_steps": [
+                "structure_register_chain_sequences_from_dataset",
+                "align_sequences_by_id (or sequence_find_best_match)",
+                "sequence_annotate_with_grn",
+                "structure_apply_grn_annotations",
+            ],
+            "composite_tool": "structure_prepare_grn_annotations",
+            "usage": {
+                "structure_prepare_grn_annotations": {
+                    "purpose": "Runs the entire chain extraction → filtering → GRN annotation → structure mapping pipeline in one call.",
+                    "arguments": {
+                        "structure_ids": "List of PDB IDs already registered in the structure processor.",
+                        "reference_table": "GRN reference (e.g., 'gpcrdb_ref').",
+                        "protein_family": "Family configuration (e.g., 'gpcr_a').",
+                        "reference_sequence_entity": "Optional chain name such as '5d5a_chain_A'; defaults to the first extracted chain.",
+                        "alignment_threshold": "Normalized alignment score (0-1) for keeping chains in the GPCR subset.",
+                    },
+                    "produces": [
+                        "Filtered sequence dataset name",
+                        "GRN table registered under data/grn/tables",
+                        "Annotation counts per structure/chain",
+                    ],
+                    "follow_up": "Call load_grn_table for previews or structure_apply_grn_annotations if you need to re-map without rerunning the full workflow.",
+                }
+            },
+            "tips": [
+                "Ensure structures are downloaded via download_entities before running GRN steps.",
+                "Lower alignment_threshold (e.g., 0.6) if no chains pass the similarity filter.",
+                "When orchestrating manually, keep the chain entity names (e.g., '3sn6_chain_A') consistent so they match GRN table rows.",
+            ],
+        }
     
     def _get_workflows_guide(self) -> Dict:
         """Get workflows guide content."""
@@ -367,7 +527,7 @@ class ProtoGuideTools(BaseTool):
                 "structure_based": {
                     "description": "Workflows starting from 3D structures",
                     "examples": [
-                        "structure_download_batch → load_structure_dataset → structure_filter_dataset → structure_collect_chain_sequences",
+                        "download_entities → load_structure_dataset → structure_filter_dataset → structure_collect_chain_sequences",
                         "structure_align_to_reference → structure_apply_grn_annotations → structure_export_dataset",
                         "extract_ligands_from_structure → ligand_compute_interactions → ligand_record_interactions",
                     ]
@@ -416,7 +576,7 @@ class ProtoGuideTools(BaseTool):
             "common_patterns": {
                 "batch_download": {
                     "description": "Download multiple structures efficiently",
-                    "example": "structure_download_batch(['3sn6', '5d5a'], dataset_name='gpcr_structures')"
+                    "example": "download_entities(['3sn6', '5d5a'], processor_type='structure', dataset_name='gpcr_structures')"
                 },
                 "cross_format": {
                     "description": "Link data across formats",

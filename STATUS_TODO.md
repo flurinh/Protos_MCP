@@ -247,3 +247,13 @@ The MCP surface now follows the `domain_action` (or `action_domain`) convention 
 - [ ] Build MoleculeProcessor surface for SMILES/InChI metadata while StructureProcessor owns coordinate storage; expose lazy SMILES generation for extracted ligands.
 - [ ] Expose MCP tools for bidirectional conversion (structure_export_ligands, ligand_generate_structure, graph generation for ligands).
 - [ ] Ensure graph generation consumes canonical frames for both proteins and ligands; update documentation/workflows accordingly.
+
+## MCP Reliability & Context Store
+- [x] Implement session-scoped context state (handles, active datasets, history) in `ServerContext`.
+- [x] Expose `context_*` tools for listing, retrieving, activating, and clearing stored handles.
+- [x] Instrument sequence + structure loaders/dataset tools to record dataset/entity usage and return context handles.
+- [x] Publish a tool catalog + enhanced `protos_guide` help surfaces driven by the catalog.
+- [x] Normalize tool naming with explicit prefixes (add aliases & deprecation notices for legacy names).
+- [x] Extend analysis/model tools with `store_in_context` hooks so outputs can be chained without raw payloads.
+- [x] Build automated MCP workflow runner that replays scripts under `workflows/` and reports pass/fail with context traces.
+- [x] Author targeted tests for session state management under `mcp_server/tests`.

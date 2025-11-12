@@ -10,9 +10,10 @@ import json
 import base64
 from pathlib import Path
 
+from protos.io.ingest.sequence_loader import SequenceLoader
+from protos.io.ingest.structure_loader import StructureLoader
+
 from ..base import BaseTool
-from ...core.exceptions import EntityNotFoundError, InvalidInputError
-from ..loader import SequenceLoaderTools, StructureLoaderTools
 
 
 class EntityOperationTools(BaseTool):
@@ -20,8 +21,222 @@ class EntityOperationTools(BaseTool):
 
     def __init__(self, context):
         super().__init__(context)
-        self._sequence_loader = SequenceLoaderTools(context)
-        self._structure_loader = StructureLoaderTools(context)
+        self._sequence_loader: Optional[SequenceLoader] = None
+        self._structure_loader: Optional[StructureLoader] = None
+
+    # Loader helpers -----------------------------------------------------
+
+    def _get_sequence_loader(self) -> SequenceLoader:
+        processor = self.get_processor("sequence")
+        loader = self._sequence_loader
+        if loader is None or getattr(loader, "_processor", None) is not processor:
+            loader = SequenceLoader(processor=processor)
+            self._sequence_loader = loader
+        return loader
+
+    def _get_structure_loader(self) -> StructureLoader:
+        processor = self.get_processor("structure")
+        loader = self._structure_loader
+        if loader is None or getattr(loader, "_processor", None) is not processor:
+            loader = StructureLoader(processor=processor)
+            self._structure_loader = loader
+        return loader
+
+    @staticmethod
+    def _normalize_structure_id(structure_id: str) -> str:
+        return structure_id.lower().strip()
+
+    def _delete_entity(self, processor, name: str) -> None:
+        if hasattr(processor, "delete_entity") and processor.entity_exists(name):
+            try:
+                processor.delete_entity(name)
+            except Exception:
+                pass
+
+    def _record_download_artifact(
+        self,
+        *,
+        tool_name: str,
+        processor_type: str,
+        name: str,
+        kind: str,
+        summary: Dict[str, Any],
+    ) -> str:
+        tags = [processor_type, "download", kind]
+        scope = f"{processor_type}.{kind}"
+        return self.record_session_artifact(
+            tool_name=tool_name,
+            name=name,
+            kind=kind,
+            processor_type=processor_type,
+            summary=summary,
+            tags=tags,
+            scope=scope,
+        )
+
+    def _build_download_context(
+        self,
+        *,
+        tool_name: str,
+        processor_type: str,
+        downloaded: List[str],
+        dataset_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        context: Dict[str, Any] = {}
+
+        handles = [
+            self._record_download_artifact(
+                tool_name=tool_name,
+                processor_type=processor_type,
+                name=name,
+                kind="entity",
+                summary={"identifier": name, "source": tool_name},
+            )
+            for name in downloaded
+        ]
+        if handles:
+            context["entity_handles"] = handles
+
+        if dataset_name:
+            dataset_handle = self._record_download_artifact(
+                tool_name=tool_name,
+                processor_type=processor_type,
+                name=dataset_name,
+                kind="dataset",
+                summary={
+                    "dataset": dataset_name,
+                    "entity_count": len(downloaded),
+                    "source": tool_name,
+                },
+            )
+            context["dataset_handle"] = dataset_handle
+
+        return context
+
+    def _download_structure_entity(
+        self,
+        *,
+        identifier: str,
+        source: Optional[str],
+        overwrite: bool,
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        processor = self.get_processor("structure")
+        normalized_id = self._normalize_structure_id(identifier)
+
+        if not overwrite and processor.entity_exists(normalized_id):
+            return self.format_error(
+                f"Structure '{identifier}' already exists",
+                "Set overwrite=true to refresh it or use download_entities for batch operations",
+            )
+
+        if overwrite and processor.entity_exists(normalized_id):
+            self._delete_entity(processor, normalized_id)
+
+        loader = self._get_structure_loader()
+        registered = loader.download_and_register(
+            identifier,
+            name=normalized_id,
+            metadata=metadata,
+            source=source,
+        )
+
+        if not registered:
+            return self.format_error(
+                f"Failed to download '{identifier}'",
+                "Verify the identifier (PDB ID, AlphaFold ID, UniProt accession, or local path).",
+            )
+
+        info = processor.entity_registry.get_entity_metadata(registered, processor.processor_type) or {}
+        payload = {
+            "identifier": identifier,
+            "registered": registered,
+            "metadata": info,
+        }
+
+        handle = self._record_download_artifact(
+            tool_name="download_entity",
+            processor_type="structure",
+            name=registered,
+            kind="entity",
+            summary={
+                "identifier": identifier,
+                "registered": registered,
+                "metadata_keys": sorted(info.keys()),
+            },
+        )
+        payload["context_handle"] = handle
+
+        return self.format_success(payload, message="Structure registered")
+
+    def _download_sequence_entity(
+        self,
+        *,
+        identifier: str,
+        overwrite: bool,
+        metadata: Optional[Dict[str, Any]],
+        materialize_entities: bool,
+    ) -> Dict[str, Any]:
+        processor = self.get_processor("sequence")
+        target_name = identifier
+
+        if not overwrite and processor.entity_exists(target_name):
+            return self.format_error(
+                f"Sequence '{identifier}' already exists",
+                "Use overwrite=true or pick a different entity name",
+            )
+
+        if overwrite and processor.entity_exists(target_name):
+            self._delete_entity(processor, target_name)
+
+        loader = self._get_sequence_loader()
+        saved_name = loader.download_and_register(
+            identifier,
+            name=target_name,
+            materialize_entities=materialize_entities,
+            metadata=metadata,
+        )
+
+        if not saved_name:
+            return self.format_error(
+                f"Failed to download '{identifier}'",
+                "Provide a local FASTA path or UniProt accession (optionally prefixed with 'uniprot:').",
+            )
+
+        manager = processor.dataset_manager
+        payload: Dict[str, Any] = {
+            "identifier": identifier,
+            "registered": saved_name,
+        }
+
+        if manager.dataset_exists(saved_name):
+            payload["entity_type"] = "dataset"
+            payload["entities"] = manager.get_dataset_entities(saved_name)
+        else:
+            payload["entity_type"] = "entity"
+            payload["metadata"] = processor.entity_registry.get_entity_metadata(
+                saved_name,
+                processor.processor_type,
+            )
+
+        summary = {
+            "identifier": identifier,
+            "registered": saved_name,
+            "entity_type": payload["entity_type"],
+        }
+        if payload["entity_type"] == "dataset":
+            summary["entity_count"] = len(payload.get("entities", []))
+
+        handle = self._record_download_artifact(
+            tool_name="download_entity",
+            processor_type="sequence",
+            name=saved_name,
+            kind="dataset" if payload["entity_type"] == "dataset" else "entity",
+            summary=summary,
+        )
+        payload["context_handle"] = handle
+
+        return self.format_success(payload, message="Sequence data registered")
 
     def register(self, server):
         """Register entity operation tools with the server."""
@@ -33,70 +248,224 @@ class EntityOperationTools(BaseTool):
             processor_type: str = "structure",
             source: Optional[str] = None,
             overwrite: bool = False,
+            metadata: Optional[Dict[str, Any]] = None,
+            materialize_entities: bool = True,
         ) -> Dict:
-            """
-            Download an entity from an external source.
-            
-            Args:
-                entity_id: ID of entity to download (e.g., PDB ID)
-                processor_type: Type of processor to use
-                overwrite: Whether to overwrite existing entity
-                
-            Returns:
-                Dictionary with download status
-            """
+            """Download a single entity (structure or sequence) via the canonical loaders."""
+
             try:
-                # Validate parameters
-                if error := self.validate_required_params(
-                    {"entity_id": entity_id}, 
-                    ["entity_id"]
-                ):
+                if error := self.validate_required_params({"entity_id": entity_id}, ["entity_id"]):
                     return error
 
-                # Validate processor type
                 if error := self.validate_processor_type(processor_type):
                     return error
 
-                # Get processor
-                processor = self.get_processor(processor_type)
+                normalized_type = processor_type.lower()
 
-                # Check if already exists
-                if not overwrite and hasattr(processor, 'entity_exists'):
-                    if processor.entity_exists(entity_id):
-                        return self.format_error(
-                            f"Entity '{entity_id}' already exists",
-                            "Use overwrite=true to replace existing entity"
-                        )
-                try:
-                    if processor_type == "sequence":
-                        result = self._sequence_loader.sequence_download(
-                            ctx,
-                            identifier=entity_id,
-                            name=entity_id,
-                            materialize_entities=True,
-                            metadata=None,
-                        )
-                        return result
-
-                    if processor_type == "structure":
-                        result = self._structure_loader.structure_download(
-                            ctx,
-                            identifier=entity_id,
-                            name=entity_id,
-                            source=source,
-                            overwrite=overwrite,
-                        )
-                        return result
-
-                    return self.format_error(
-                        f"Download not implemented for processor '{processor_type}'",
-                        "Currently supported: sequence, structure.",
+                if normalized_type == "structure":
+                    return self._download_structure_entity(
+                        identifier=entity_id,
+                        source=source,
+                        overwrite=overwrite,
+                        metadata=metadata,
                     )
-                except Exception as exc:
-                    return self.handle_error(exc)
+
+                if normalized_type == "sequence":
+                    return self._download_sequence_entity(
+                        identifier=entity_id,
+                        overwrite=overwrite,
+                        metadata=metadata,
+                        materialize_entities=materialize_entities,
+                    )
+
+                return self.format_error(
+                    f"Download not implemented for processor '{processor_type}'",
+                    "Currently supported processor types: structure, sequence.",
+                )
 
             except Exception as exc:
                 return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=download_entity,
+            name="download_entity",
+            description="Download a single entity (structure or sequence) and register it with the appropriate processor.",
+            parameters=[
+                {"name": "entity_id", "type": "str"},
+                {"name": "processor_type", "type": "str", "default": "structure"},
+                {"name": "source", "type": "str", "optional": True},
+                {"name": "overwrite", "type": "bool", "default": False},
+                {"name": "materialize_entities", "type": "bool", "default": True},
+            ],
+            returns={"fields": ["registered", "context_handle"]},
+            tags=["entity", "download"],
+        )
+
+        @server.tool()
+        def download_entities(
+            ctx,
+            identifiers: List[str],
+            processor_type: str = "structure",
+            dataset_name: Optional[str] = None,
+            create_dataset: bool = True,
+            source: Optional[str] = None,
+            overwrite: bool = False,
+            metadata: Optional[Dict[str, Any]] = None,
+            materialize_entities: bool = True,
+        ) -> Dict:
+            """Download multiple entities and optionally create/register a dataset."""
+
+            try:
+                if error := self.validate_required_params({"identifiers": identifiers}, ["identifiers"]):
+                    return error
+
+                if not identifiers:
+                    return self.format_error("No identifiers provided", "Pass one or more IDs to download.")
+
+                if error := self.validate_processor_type(processor_type):
+                    return error
+
+                normalized_type = processor_type.lower()
+                processor = self.get_processor(normalized_type)
+                skipped_existing: List[str] = []
+                download_targets: List[str] = []
+
+                for identifier in identifiers:
+                    target_name = (
+                        self._normalize_structure_id(identifier)
+                        if normalized_type == "structure"
+                        else identifier
+                    )
+                    if not overwrite and hasattr(processor, "entity_exists") and processor.entity_exists(target_name):
+                        skipped_existing.append(identifier)
+                        continue
+                    if overwrite and hasattr(processor, "entity_exists") and processor.entity_exists(target_name):
+                        self._delete_entity(processor, target_name)
+                    download_targets.append(identifier)
+
+                downloaded: List[str] = []
+                failed: List[str] = []
+
+                if download_targets:
+                    if normalized_type == "structure":
+                        loader = self._get_structure_loader()
+                        downloaded, failed = loader.download_batch(
+                            download_targets,
+                            dataset_name=dataset_name,
+                            create_dataset=create_dataset,
+                            source=source,
+                            metadata=metadata,
+                        )
+                    elif normalized_type == "sequence":
+                        loader = self._get_sequence_loader()
+                        downloaded, failed = loader.download_batch(
+                            download_targets,
+                            dataset_name=dataset_name,
+                            create_dataset=create_dataset,
+                            metadata=metadata,
+                            materialize_entities=materialize_entities,
+                        )
+                    else:
+                        return self.format_error(
+                            f"Download not implemented for processor '{processor_type}'",
+                            "Currently supported processor types: structure, sequence.",
+                        )
+
+                payload: Dict[str, Any] = {
+                    "processor_type": normalized_type,
+                    "requested": identifiers,
+                    "downloaded": downloaded,
+                    "failed": failed,
+                }
+
+                if skipped_existing:
+                    payload["skipped_existing"] = skipped_existing
+
+                if dataset_name and downloaded and create_dataset:
+                    payload["dataset_name"] = dataset_name
+
+                context_handles = self._build_download_context(
+                    tool_name="download_entities",
+                    processor_type=normalized_type,
+                    downloaded=downloaded,
+                    dataset_name=dataset_name if dataset_name and downloaded and create_dataset else None,
+                )
+                if context_handles:
+                    payload["context"] = context_handles
+
+                message = "Download completed"
+                if failed:
+                    message = f"Downloaded {len(downloaded)} of {len(identifiers)} identifiers"
+
+                return self.format_success(payload, message=message)
+
+            except Exception as exc:
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=download_entities,
+            name="download_entities",
+            description="Download a list of entities for a processor, optionally materializing them as a dataset.",
+            parameters=[
+                {"name": "identifiers", "type": "list[str]"},
+                {"name": "processor_type", "type": "str", "default": "structure"},
+                {"name": "dataset_name", "type": "str", "optional": True},
+                {"name": "create_dataset", "type": "bool", "default": True},
+                {"name": "overwrite", "type": "bool", "default": False},
+                {"name": "materialize_entities", "type": "bool", "default": True},
+            ],
+            returns={"fields": ["downloaded", "failed", "context"]},
+            tags=["entity", "download", "batch"],
+        )
+
+        @server.tool()
+        def download_sources(ctx, processor_type: str = "structure") -> Dict:
+            """List available download sources for the requested processor."""
+
+            try:
+                if error := self.validate_processor_type(processor_type):
+                    return error
+
+                normalized_type = processor_type.lower()
+                if normalized_type == "structure":
+                    loader = self._get_structure_loader()
+                    sources = loader.list_sources()
+                    canonical = ["rcsb", "alphafold", "local"]
+                    hint = (
+                        "Use 'rcsb' for experimental PDB IDs, 'alphafold' for predictions, and 'local' to"
+                        " import CIF/PDB files. Aliases like 'pdb' and 'mmcif' map to the canonical names."
+                    )
+                elif normalized_type == "sequence":
+                    loader = self._get_sequence_loader()
+                    sources = sorted(set(loader.list_sources() + ["local", "uniprot"]))
+                    canonical = ["local", "uniprot"]
+                    hint = "Provide local FASTA paths or UniProt accessions (with or without the 'uniprot:' prefix)."
+                else:
+                    return self.format_error(
+                        f"Download sources not implemented for processor '{processor_type}'",
+                        "Currently supported processor types: structure, sequence.",
+                    )
+
+                return self.format_success(
+                    {
+                        "processor_type": normalized_type,
+                        "sources": sources,
+                        "canonical": canonical,
+                        "hint": hint,
+                    }
+                )
+
+            except Exception as exc:
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=download_sources,
+            name="download_sources",
+            description="List valid download sources/aliases for a processor.",
+            parameters=[{"name": "processor_type", "type": "str", "default": "structure"}],
+            returns={"fields": ["sources", "canonical", "hint"]},
+            tags=["entity", "download", "guide"],
+        )
         
         @server.tool()
         def load_entity(ctx, name: str, format: str,
@@ -126,11 +495,16 @@ class EntityOperationTools(BaseTool):
                 
                 # Get processor
                 processor = self.get_processor(format)
+                resolved_name = (
+                    self._normalize_structure_id(name)
+                    if format == "structure"
+                    else name
+                )
                 
                 # Load entity based on processor type
                 try:
                     if format == "structure":
-                        frame = processor.load_entity(name)
+                        frame = processor.load_entity(resolved_name)
                         if frame is None:
                             return self.format_error(
                                 f"Failed to load structure {name}",
@@ -147,11 +521,11 @@ class EntityOperationTools(BaseTool):
                                 "PropertyProcessor doesn't have get_entity_properties method"
                             )
                     elif hasattr(processor, 'load_entity'):
-                        data = processor.load_entity(name)
+                        data = processor.load_entity(resolved_name)
                     elif hasattr(processor, 'load_sequence') and format == "sequence":
-                        data = processor.load_sequence(name)
+                        data = processor.load_sequence(resolved_name)
                     elif hasattr(processor, 'load') and format == "grn":
-                        data = processor.load(name)
+                        data = processor.load(resolved_name)
                     else:
                         return self.format_error(
                             f"Load not implemented for {format} processor",

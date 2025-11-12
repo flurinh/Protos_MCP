@@ -111,8 +111,9 @@ async def run_workflow() -> Dict[str, Any]:
         await call("config_initialize_data", reinstall_reference=True, refresh_registry=True)
 
         download = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=[STRUCTURE_ID],
+            processor_type="structure",
             dataset_name=STRUCTURE_DATASET,
             create_dataset=True,
             overwrite=False,
@@ -199,7 +200,7 @@ async def run_workflow() -> Dict[str, Any]:
 
         return {
             "data_root": data_root,
-            "structure_download": download,
+            "structure_downloads": download,
             "sequence_dataset": sequence_dataset,
             "targeted_sequences": targeted_sequences,
             "mutation_jobs": mutation_jobs,

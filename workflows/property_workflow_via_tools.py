@@ -103,8 +103,9 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         download_info = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=GPCR_IDS,
+            processor_type="structure",
             dataset_name="gpcr_structures",
             create_dataset=True,
             overwrite=False,
@@ -219,7 +220,7 @@ async def run_workflow() -> Dict[str, Any]:
 
         return {
             "data_root": data_root,
-            "structure_download": download_info,
+            "structure_downloads": download_info,
             "sequence_register": sequence_register,
             "dataset_load": dataset_load,
             "alignments": alignments,
@@ -244,4 +245,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

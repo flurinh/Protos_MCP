@@ -1,0 +1,24 @@
+{
+  "name": "embedding_chain_sequences",
+  "processor_type": "sequence",
+  "entities": [
+    "3sn6_chain_R",
+    "4daj_chain_D",
+    "5d5a_chain_A",
+    "6b73_chain_B"
+  ],
+  "entity_ids": [
+    "89d750b5-4d43-4be4-a647-68a1cff970d6",
+    "fc94fc71-f7bd-4241-9207-f50474195364",
+    "9314ed5d-b3ba-4271-b28b-193b9e3cb17c",
+    "3ce9423b-f131-438d-b22c-562607c88b7e"
+  ],
+  "metadata": {
+    "source": "structure_embedding_similarity_via_tools",
+    "reference_sequence": "5d5a_chain_A",
+    "threshold": 0.35,
+    "entity_count": 4
+  },
+  "created": "2025-11-12T14:17:50.979697",
+  "modified": "2025-11-12T14:17:50.979704"
+}

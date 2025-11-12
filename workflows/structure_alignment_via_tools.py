@@ -100,8 +100,9 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         download = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=DEMO_STRUCTURES,
+            processor_type="structure",
             dataset_name=DATASET_NAME,
             create_dataset=True,
             overwrite=False,

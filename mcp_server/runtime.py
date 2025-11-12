@@ -14,19 +14,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .context import ServerContext
 from .config import ServerConfig
-from .tools.config import ConfigTools
-from .tools.guide import ProtoGuideTools
-from .tools.entity.discovery import EntityDiscoveryTools
-from .tools.entity.operations import EntityOperationTools
-from .tools.dataset.operations import DatasetOperationTools
-from .tools.loader import SequenceLoaderTools, StructureLoaderTools
-from .tools.model import ModelManagerTools
-from .tools.analysis.sequence import SequenceAnalysisTools
-from .tools.analysis.structure import StructureAnalysisTools
-from .tools.analysis.property import PropertyAnalysisTools
-from .tools.analysis.ligand import LigandAnalysisTools
-from .tools.analysis.grn import GRNAnalysisTools
-from .tools.analysis.embedding import EmbeddingAnalysisTools
+# Avoid heavyweight imports at module import time; import lazily in default_tools
 
 ToolFactory = Callable[[ServerContext], Iterable]
 
@@ -34,22 +22,57 @@ ToolFactory = Callable[[ServerContext], Iterable]
 def default_tools(context: ServerContext) -> Iterable:
     """Instantiate the standard tool suite for the given context."""
 
-    return (
+    from .tools.context import ContextTools
+    from .tools.config import ConfigTools
+    from .tools.guide import ProtoGuideTools
+    from .tools.entity.discovery import EntityDiscoveryTools
+    from .tools.entity.operations import EntityOperationTools
+    from .tools.dataset.operations import DatasetOperationTools
+    from .tools.loader import SequenceLoaderTools
+    from .tools.sequence_workflow import SequenceWorkflowTools
+
+    try:
+        from .tools.model import ModelManagerTools
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        ModelManagerTools = None
+        print(f"ModelManagerTools unavailable: {exc}", file=sys.stderr)
+
+    optional_imports = []
+    for module_path, attr in [
+        ("mcp_server.tools.analysis.embedding", "EmbeddingAnalysisTools"),
+        ("mcp_server.tools.analysis.property", "PropertyAnalysisTools"),
+        ("mcp_server.tools.analysis.structure", "StructureAnalysisTools"),
+        ("mcp_server.tools.analysis.ligand", "LigandAnalysisTools"),
+        ("mcp_server.tools.analysis.grn", "GRNAnalysisTools"),
+        ("mcp_server.tools.analysis.sequence", "SequenceAnalysisTools"),
+    ]:
+        try:
+            module = __import__(module_path, fromlist=[attr])
+            optional_imports.append(getattr(module, attr))
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            print(f"Skipping {attr}: {exc}", file=sys.stderr)
+
+    tools = [
         ProtoGuideTools(context),
+        ContextTools(context),
         ConfigTools(context),
         EntityDiscoveryTools(context),
         EntityOperationTools(context),
         DatasetOperationTools(context),
-        ModelManagerTools(context),
+    ]
+
+    if ModelManagerTools is not None:
+        tools.append(ModelManagerTools(context))
+
+    tools.extend([
         SequenceLoaderTools(context),
-        StructureLoaderTools(context),
-        EmbeddingAnalysisTools(context),
-        PropertyAnalysisTools(context),
-        StructureAnalysisTools(context),
-        LigandAnalysisTools(context),
-        GRNAnalysisTools(context),
-        SequenceAnalysisTools(context),
-    )
+        SequenceWorkflowTools(context),
+    ])
+
+    for tool_cls in optional_imports:
+        tools.append(tool_cls(context))
+
+    return tuple(tools)
 
 
 def register_tools(server: FastMCP, context: ServerContext, tools: Optional[Iterable] = None) -> None:

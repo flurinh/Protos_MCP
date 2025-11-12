@@ -39,7 +39,7 @@ Next: update the MCP tools and server routes to reflect these changes (embedding
 - The runtime writes a compact NPZ artifact plus sidecar JSON and returns a `RuntimeResult`; ingest via `EmbeddingProcessor.ingest_from_invocation(invocation, dataset_name=...)` to create a formal dataset.
 
 ## Tool Categories & Naming Patterns
-- Loader tools (`structure_download`, `sequence_download`, etc.) move data into the registry; they live under `mcp_server/tools/loader/`.
+- Loader tools (`download_entity`, `download_entities`, `sequence_download`, etc.) move data into the registry; they live under `mcp_server/tools/loader/`.
 - Data IO tools cover dataset CRUD and entity management (`create_dataset`, `entity_list_entities`, `load_entity`). They ensure everything flows through `DatasetManager` and the registry.
 - Analysis tools wrap processor logic for structures, sequences, GRNs, ligands, properties, and embeddings. The convention is **verb-first names that include the domain**, e.g., `list_structure_entities`, `calculate_sequence_identity`.
 - Cross-processor workflows (model manager) expose the Lambda prediction chain and model discovery helpers under `model/manager.py`.
@@ -184,6 +184,7 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `structure_align_to_reference` | Align structures via `StructureProcessor.align_and_record` and surface registry artifacts. | `analysis/structure.py` |
 | `structure_annotate_entities` | Apply chain-level and optional structure-level annotations. | `analysis/structure.py` |
 | `structure_apply_grn_annotations` | Map GRN annotations from a table onto structure residues. | `analysis/structure.py` |
+| `structure_prepare_grn_annotations` | Extract chains, filter/align them, annotate with GRN, and project annotations back onto the provided structures in one call. | `analysis/structure.py` |
 | `structure_collect_chain_sequences` | Collect per-chain sequences for one or more structures. | `analysis/structure.py` |
 | `structure_compute_embedding_similarity` | Compute per-residue embedding similarity relative to a reference chain. | `analysis/structure.py` |
 | `structure_compute_water_networks` | Analyze water-mediated residue networks for the given structures. | `analysis/structure.py` |
@@ -247,6 +248,7 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `guide_explain_concept` | Get detailed explanation of Protos concepts. Concepts: - entity: What is an entity in Protos? - processor: What are processors and how do they work? - dataset: Understanding datasets vs entities - grn: Generic Residue Numbering system - paths: How Protos manages file paths - formats: Supported data formats Args: concept: Concept to explain Returns: Detailed explanation with examples | `guide.py` |
 | `protos_guide` | Get interactive guidance on using Protos. Topics available: - overview: General introduction to Protos - processors: Understanding the processor system - data_management: Core data management principles - entity_registry: How entities are tracked - workflows: Common analysis workflows - best_practices: Best practices and tips Args: topic: Specific topic to get help on (optional) Returns: Guidance information and examples | `guide.py` |
 | `guide_workflow_example` | Get step-by-step examples of common Protos workflows. Workflow types: - structure_analysis: Basic structure loading and analysis - grn_assignment: GRN assignment for protein families - ligand_analysis: Ligand extraction and analysis - sequence_alignment: Sequence alignment workflows - property_integration: Adding experimental properties - cross_format: Working across multiple data formats Args: workflow_type: Type of workflow example to retrieve Returns: Step-by-step workflow with MCP tool calls | `guide.py` |
+| `guide_tool_help` | Query `tool_usage.yaml` for enriched descriptions, arguments, and workflow context for a specific tool (or list all entries). | `guide.py` |
 
 ## Loader Tools
 ### Sequence Loader
@@ -256,12 +258,12 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `sequence_inspect_identifier` | Parse an identifier using SequenceLoader without downloading. | `loader/sequence.py` |
 | `sequence_register_records` | Register sequences provided inline (e.g., from another tool). | `loader/sequence.py` |
 
-### Structure Loader
+### Entity Download
 | Tool | Description | Module |
 | --- | --- | --- |
-| `structure_download` | Download a structure (PDB/AlphaFold/local) and register it. | `loader/structure.py` |
-| `structure_download_batch` | Download multiple structures and optionally create a dataset. | `loader/structure.py` |
-| `structure_sources` | List available structure download sources. | `loader/structure.py` |
+| `download_entity` | Download a single entity (structure or sequence) and register it with the corresponding processor. | `entity/operations.py` |
+| `download_entities` | Download multiple entities and optionally create/update a dataset. | `entity/operations.py` |
+| `download_sources` | List available download sources/aliases for the requested processor type. | `entity/operations.py` |
 
 ## Runtime Config
 ### Config Helpers

@@ -536,6 +536,8 @@ class SequenceAnalysisTools(BaseTool):
             sequences: Optional[Dict[str, str]] = None,
             sequence_ids: Optional[List[str]] = None,
             dataset_name: Optional[str] = None,
+            store_in_context: bool = False,
+            context_label: Optional[str] = None,
         ) -> Dict:
             """Run MMseqs pairwise alignment over a collection of sequences."""
 
@@ -617,6 +619,29 @@ class SequenceAnalysisTools(BaseTool):
                             "line_count": len(lines),
                         }
                     )
+
+                if store_in_context:
+                    artifact_name = (
+                        context_label
+                        or (dataset_name if isinstance(dataset_name, str) else None)
+                        or "sequence_mmseqs_alignment"
+                    )
+                    summary = {
+                        "sequence_count": payload.get("sequence_count"),
+                        "result_type": payload.get("result_type"),
+                        "source": "sequence_align_mmseqs",
+                    }
+                    context_handle = self.record_session_artifact(
+                        tool_name="sequence_align_mmseqs",
+                        name=artifact_name,
+                        kind="result",
+                        processor_type="sequence",
+                        summary=summary,
+                        tags=["sequence", "analysis", "alignment"],
+                        label=context_label,
+                        scope="sequence.result",
+                    )
+                    payload["context_handle"] = context_handle
 
                 return self.format_success(payload)
 
@@ -1964,6 +1989,8 @@ class SequenceAnalysisTools(BaseTool):
             normalize_entropy: bool = True,
             store_result: bool = False,
             result_name: Optional[str] = None,
+            store_in_context: bool = False,
+            context_label: Optional[str] = None,
         ) -> Dict:
             """Compute per-position conservation across aligned sequences."""
 
@@ -1995,6 +2022,29 @@ class SequenceAnalysisTools(BaseTool):
                 if not store_result:
                     summary["full_table"] = df.to_dict(orient="records")
 
+                if store_in_context:
+                    artifact_name = (
+                        context_label
+                        or result_name
+                        or dataset_name
+                        or "sequence_conservation"
+                    )
+                    context_handle = self.record_session_artifact(
+                        tool_name="sequence_compute_conservation",
+                        name=artifact_name,
+                        kind="result",
+                        processor_type="sequence",
+                        summary={
+                            "positions": summary.get("positions"),
+                            "dataset": dataset_name,
+                            "source": "sequence_compute_conservation",
+                        },
+                        tags=["sequence", "analysis", "conservation"],
+                        label=context_label,
+                        scope="sequence.result",
+                    )
+                    summary["context_handle"] = context_handle
+
                 return self.format_success(summary)
 
             except Exception as exc:
@@ -2011,6 +2061,8 @@ class SequenceAnalysisTools(BaseTool):
             top_k: Optional[int] = 20,
             store_result: bool = False,
             result_name: Optional[str] = None,
+            store_in_context: bool = False,
+            context_label: Optional[str] = None,
         ) -> Dict:
             """Compute residue linkage using mutual information."""
 
@@ -2034,12 +2086,35 @@ class SequenceAnalysisTools(BaseTool):
                     result_name=result_name,
                 )
 
-                return self.format_success(
-                    {
-                        "pair_count": int(len(df)),
-                        "pairs": df.to_dict(orient="records"),
-                    }
-                )
+                payload = {
+                    "pair_count": int(len(df)),
+                    "pairs": df.to_dict(orient="records"),
+                }
+
+                if store_in_context:
+                    artifact_name = (
+                        context_label
+                        or result_name
+                        or dataset_name
+                        or "sequence_linkage"
+                    )
+                    context_handle = self.record_session_artifact(
+                        tool_name="sequence_compute_linkage",
+                        name=artifact_name,
+                        kind="result",
+                        processor_type="sequence",
+                        summary={
+                            "pair_count": payload["pair_count"],
+                            "dataset": dataset_name,
+                            "source": "sequence_compute_linkage",
+                        },
+                        tags=["sequence", "analysis", "linkage"],
+                        label=context_label,
+                        scope="sequence.result",
+                    )
+                    payload["context_handle"] = context_handle
+
+                return self.format_success(payload)
 
             except Exception as exc:
                 return self.handle_error(exc)

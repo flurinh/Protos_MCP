@@ -112,10 +112,11 @@ processor.save_entity(name: str, data: Dict, metadata: Optional[Dict] = None)
 ### New Tools Added
 - **sequence_download / sequence_register_records**: Fetch or register sequences via `SequenceLoader` (local FASTA, UniProt) with automatic entity registration.
 - **sequence_create_mutant_library / sequence_compute_conservation / sequence_compute_linkage**: Generate combinatorial variant sets and perform downstream analytics directly from MCP.
-- **structure_download / structure_download_batch**: Retrieve structures from RCSB/AlphaFold/local files through `StructureLoader`, with optional dataset creation.
+- **download_entity / download_entities**: Retrieve structures or sequences via the loaders (RCSB/AlphaFold/local FASTA/UniProt) with optional dataset creation.
 - **embedding_list_models / embedding_generate**: Inspect available embedding backends and persist embeddings for sequence datasets.
 - **sequence_annotate_with_grn**: Run the end-to-end GRN annotation workflow against registered sequence datasets and persist GRN tables.
 - **structure_apply_grn_annotations**: Project GRN tables back onto structure residues for the annotated chains.
+- **structure_prepare_grn_annotations**: Composite helper that extracts chains, filters by alignment threshold, annotates with GRN, and updates the original structures in one call.
 
 - **Property Analysis Tools**:
   - `create_property_table`: Create property tables from entity data

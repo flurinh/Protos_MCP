@@ -1,0 +1,30 @@
+{
+  "name": "embedding_structures",
+  "processor_type": "structure",
+  "entities": [
+    "3sn6",
+    "5d5a",
+    "6b73",
+    "4daj"
+  ],
+  "entity_ids": [
+    "30f42180-54e1-43b6-818c-6ffa77470c84",
+    "15127eaf-cbb0-4d19-a926-2d79ac5754fd",
+    "abcb59df-b9d8-4a83-b4a4-2e9a3407ebae",
+    "f1ee96b9-017b-46c5-98de-d530e894cb90"
+  ],
+  "metadata": {
+    "created_by": "StructureLoader",
+    "source_identifiers": [
+      "3sn6",
+      "5d5a",
+      "6b73",
+      "4daj"
+    ],
+    "download_date": "2025-11-12T14:17:49.644577",
+    "success_count": 4,
+    "fail_count": 0
+  },
+  "created": "2025-11-12T14:17:49.644655",
+  "modified": "2025-11-12T14:17:49.644658"
+}

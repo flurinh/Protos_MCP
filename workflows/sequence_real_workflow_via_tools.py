@@ -98,8 +98,9 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         download = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=DEMO_STRUCTURES,
+            processor_type="structure",
             dataset_name="gpcr_structures",
             create_dataset=True,
             overwrite=False,
@@ -116,7 +117,7 @@ async def run_workflow() -> Dict[str, Any]:
                 f"dataset_entities failed: {dataset_entities_resp.get('error')}"
             )
 
-        print("[DEBUG] structure_download_batch:", download, flush=True)
+        print("[DEBUG] download_entities:", download, flush=True)
         print("[DEBUG] dataset_entities:", dataset_entities_resp, flush=True)
 
         downloaded_structures = download.get("data", {}).get("downloaded", []) or []
@@ -274,7 +275,7 @@ async def run_workflow() -> Dict[str, Any]:
 
         return {
             "data_root": data_root,
-            "structure_download": download,
+            "structure_downloads": download,
             "chain_registration": register_chains,
             "selected_entities": selected_entities,
             "load_details": load_details,

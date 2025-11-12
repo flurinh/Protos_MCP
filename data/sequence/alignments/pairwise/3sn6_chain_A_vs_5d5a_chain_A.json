@@ -1,0 +1,11 @@
+{
+  "seq1_id": "3sn6_chain_A",
+  "seq2_id": "5d5a_chain_A",
+  "score": 105.00000000000041,
+  "alignment": [
+    "TEDQRNE-------------------------------EKAQREANK---------------------------------------------------------------------KIEKQLQKDK----------------------QVYRATHRLLLLGAGESGKSTIVKQKATK---------------------------------------VQDIKNNLK------EAIETIVAAMS------------NLVPPVELANPENQFR---------VDYILSVMN------VPDFDFPPEFYEHAKALWE------------DEGVR-ACYERSNEYQLI------------DCAQYFLDKIDVIKQDDYVPSDQDLLRCRVSGIFETKFQVDKVNFHMFDVGGQRDERRKWIQCFN-DVTAII-----------------FVVASSSYNM------------TNRL---------QEALNLFKSIWNNRWLRTISVILFLNKQDLLAEKVLAGKSKIEDYFPEFARYTTPEDATPEPGEDPRVTRAKYFIRDEFLRISTASGDGRHYCYPHFTCAVDTENIRRVFNDCRDIIQRMHLRQYELL",
+    "-----.|-------------------------------|..|...|.---------------------------------------------------------------------|....|.|.|----------------------..|||||-----------------|.|..---------------------------------------.|..|..||------.|..|....|.------------|.|....----.|..|---------..|..|..|------.|||..---------|..|------------|||.|-..|.....|..|------------..|...|||---------------.......|..-||....|.--------------------||-||.|..-----------------.|......||------------||.|---------..|.||.||.|.|.--------------------------------------------||--------.|||--------|..|....|....|.---------------------------------",
+    "-----DEVWVVGMGIVMSLIVLAIVFGNVLVITAIAKFERLQTVTNYFITSLACADLVMGLAVVPFGAAHILMKMWTFGNFWCEFWTSIDVLCVTASIETLCVIAVDRYFAITSPFKYQSLLTKNKARVIILMVWIVSGLTSFLPIQMHWYRATH-----------------QEAINCYAEETCCDFFTNQAYAIASSIVSFYVPLVIMVFVYSRVFQEAKRQLKFCLKEHKALKTLGIIMGTFTLCWLPFFIVNIVHVIQ----DNLIRKEVYILLNWIGYVNSGFNPLIYCRSPDFRI---------AFQELLCLNIFEMLRIDEGLRLKIYKDTEGYYTIGIGHLLTKSPSLNAAKSELDK---------------AIGRNTNGVI-TKDEAEKL--------------------FNQDVDAAVRGILRNAKLKPVYDSLDAVRRAALINMVFQMGETGVAGFTNSLRMLQQKRWDEAAVNLAKSRWYNQ--------------------------------------------TP--------NRAK--------RVITTFRTGTWDAYX---------------------------------"
+  ],
+  "timestamp": "2025-11-12T14:17:50.504213"
+}

@@ -1,0 +1,18 @@
+{
+  "name": "embedding_chain_dataset_5d5a",
+  "processor_type": "sequence",
+  "entities": [
+    "5d5a_chain_A"
+  ],
+  "entity_ids": [
+    "9314ed5d-b3ba-4271-b28b-193b9e3cb17c"
+  ],
+  "metadata": {
+    "structure_id": "5d5a",
+    "semantic_role": "chain_sequence",
+    "chain_count": 1,
+    "size": 1
+  },
+  "created": "2025-11-12T14:17:50.004158",
+  "modified": "2025-11-12T14:17:50.004165"
+}

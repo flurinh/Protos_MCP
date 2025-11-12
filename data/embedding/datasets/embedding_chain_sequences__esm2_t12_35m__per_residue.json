@@ -1,0 +1,31 @@
+{
+  "name": "embedding_chain_sequences__esm2_t12_35m__per_residue",
+  "processor_type": "embedding",
+  "entities": [
+    "3sn6_chain_R_esm2_t12_35m_per_residue_embedding_chain_sequences_esm2_t12_35m_per_residue",
+    "4daj_chain_D_esm2_t12_35m_per_residue_embedding_chain_sequences_esm2_t12_35m_per_residue",
+    "5d5a_chain_A_esm2_t12_35m_per_residue_embedding_chain_sequences_esm2_t12_35m_per_residue",
+    "6b73_chain_B_esm2_t12_35m_per_residue_embedding_chain_sequences_esm2_t12_35m_per_residue"
+  ],
+  "entity_ids": [
+    "39ecd14f-88a9-4692-83ae-92877aec4f7d",
+    "b57b37c2-7777-4ef8-ae03-7053ae4a3445",
+    "d0dc6d6c-f33c-427f-b152-592d81039090",
+    "8cd40f00-e63e-4ab7-8eb9-f585e9fb2957"
+  ],
+  "metadata": {
+    "models": "esm2_t12_35m",
+    "embedding_type": "per_residue",
+    "entity_count": 4,
+    "embedding_dim": 480,
+    "artifact_path": "embedding/embeddings/esm2_t12_35m/embedding_chain_sequences__esm2_t12_35m__per_residue",
+    "sequence_ids": [
+      "3sn6_chain_R",
+      "4daj_chain_D",
+      "5d5a_chain_A",
+      "6b73_chain_B"
+    ]
+  },
+  "created": "2025-11-12T14:17:53.853425",
+  "modified": "2025-11-12T14:17:53.853435"
+}

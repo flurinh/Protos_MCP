@@ -1,0 +1,102 @@
+# Enriched MCP tool metadata consumed by guide_tool_help.
+download_entity:
+  summary: Download and register a single entity through the appropriate loader (structure→StructureLoader, sequence→SequenceLoader).
+  arguments:
+    entity_id: Identifier such as a PDB ID (3sn6), UniProt accession (P07550), or local path.
+    processor_type: structure|sequence (defaults to structure).
+    source: Optional override for structure sources (rcsb/alphafold/local) or sequence prefices (uniprot/local).
+    overwrite: When true, existing registry entries are deleted before re-download.
+  workflows:
+    - workflows/structure_alignment_via_tools.py
+    - workflows/structure_water_network_via_tools.py
+    - workflows/property_workflow_via_tools.py
+  tips:
+    - Structures are normalized to lowercase IDs automatically, so you can pass 5D5A or 5d5a interchangeably.
+    - Sequences default to materializing every FASTA record; set materialize_entities=false only when you want dataset-only registration.
+  example: download_entity('1ubq', processor_type='structure', source='rcsb')
+
+download_entities:
+  summary: Bulk download wrapper that accepts a list of identifiers, optional dataset name, and shared options.
+  arguments:
+    identifiers: List of PDB IDs/UniProt IDs/local paths.
+    processor_type: structure|sequence (defaults to structure).
+    dataset_name: When provided and create_dataset=true, successful downloads are grouped into this dataset.
+    create_dataset: Toggle dataset creation; useful when you just need the entities registered.
+  workflows:
+    - workflows/structure_embedding_similarity_via_tools.py
+    - workflows/structure_grn_annotation_via_tools.py
+    - workflows/sequence_real_workflow_via_tools.py
+  tips:
+    - Existing entities are reported in skipped_existing; pass overwrite=true to refresh them.
+    - Combine with dataset_entities to confirm membership before running downstream analysis.
+  example: download_entities(['3sn6', '5d5a'], processor_type='structure', dataset_name='gpcr_structures')
+
+download_sources:
+  summary: Introspect loader-specific aliases so prompts and agents can cite valid source names.
+  arguments:
+    processor_type: structure|sequence.
+  workflows:
+    - Manual prompting when unsure whether to use rcsb, alphafold, or local imports.
+  tips:
+    - Structure loader exposes aliases such as pdb/mmcif → rcsb and af/alpha_fold → alphafold.
+    - Sequence loader always reports ['local', 'uniprot']; prepend "uniprot:" to batch multiple IDs in one call.
+  example: download_sources(processor_type='structure')
+
+load_entity:
+  summary: Canonical entry point for retrieving entity content (structures, sequences, properties, etc.) with JSON/base64/summary output options.
+  arguments:
+    name: Registered entity name (matches what download_entity/download_entities returned).
+    format: Processor type (structure, sequence, property, grn, ...).
+    output_format: json|summary|base64 (defaults to json).
+  workflows:
+    - workflows/structure_water_network_via_tools.py
+    - workflows/grn_workflow_via_tools.py
+  tips:
+    - For structures the tool automatically normalizes uppercase IDs to lowercase before hitting StructureProcessor.
+    - Use output_format='summary' when routing data back through an LLM to avoid flooding with full DataFrames.
+  example: load_entity('5d5a', format='structure', output_format='summary')
+
+sequence_annotate_with_grn:
+  summary: Annotate a sequence dataset (or explicit sequence map) with GRN numbering using the bundled reference tables.
+  arguments:
+    dataset_name: Name of the sequence dataset to annotate; alternatively provide sequences/entity_names.
+    reference_table: GRN reference (e.g., gpcrdb_ref).
+    protein_family: GRN family configuration (e.g., gpcr_a).
+    output_table: Optional GRN table name saved under data/grn/tables.
+    allow_create: Set true when you want to create a new GRN table.
+  workflows:
+    - workflows/structure_grn_annotation_via_tools.py
+    - workflows/grn_workflow_via_tools.py
+  tips:
+    - Provide either dataset_name, sequences, or entity_names; the tool merges them into a single sequence map.
+    - Always set allow_create=True when writing to a fresh output_table, otherwise the processor refuses to create it.
+  example: sequence_annotate_with_grn(dataset_name='grn_chain_filtered', reference_table='gpcrdb_ref', protein_family='gpcr_a', output_table='grn_chain_filtered_grn', allow_create=True)
+
+structure_apply_grn_annotations:
+  summary: Read a GRN table and project the labels back onto one or more structure entities (adds/updates the chosen column).
+  arguments:
+    grn_table: GRN table name returned by sequence_annotate_with_grn.
+    structures: List of registered structure IDs (case-insensitive).
+    column_name: Column to store the GRN labels (default 'grn').
+  workflows:
+    - workflows/structure_grn_annotation_via_tools.py
+    - workflows/structure_water_network_via_tools.py
+  tips:
+    - Chain sequence entities must follow the "{structure}_chain_{chain}" naming convention so the tool can match them to GRN rows.
+    - Run download_entities + structure_prepare_grn_annotations first to ensure the structures and GRN table exist.
+  example: structure_apply_grn_annotations(grn_table='grn_chain_filtered_grn', structures=['3sn6','5d5a'])
+
+structure_prepare_grn_annotations:
+  summary: Composite helper that extracts chains, filters/aligns them, annotates sequences with GRN, and writes the annotations back to the structures.
+  arguments:
+    structure_ids: List of structure IDs to process.
+    reference_table: GRN reference (e.g., gpcrdb_ref).
+    protein_family: GRN family (e.g., gpcr_a).
+    reference_sequence_entity: Optional chain entity to use as the alignment reference.
+    alignment_threshold: Normalized alignment cutoff (0-1) for keeping GPCR-like chains (default 0.75).
+  workflows:
+    - workflows/structure_grn_annotation_via_tools.py
+  tips:
+    - Set chain_dataset_prefix/filtered_sequence_dataset/grn_table_name if you want predictable dataset names; otherwise sensible defaults are used.
+    - The tool returns alignment metrics, filtered entity names, the GRN table name, and the summary from structure_apply_grn_annotations for follow-up inspection.
+  example: structure_prepare_grn_annotations(structure_ids=['3sn6','5d5a'], reference_table='gpcrdb_ref', protein_family='gpcr_a', reference_sequence_entity='5d5a_chain_A', alignment_threshold=0.7)

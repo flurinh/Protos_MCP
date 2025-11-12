@@ -1,0 +1,28 @@
+{
+  "name": "lambda_gpcr_sequences",
+  "processor_type": "sequence",
+  "entities": [
+    "ADRB2_HUMAN",
+    "A2AR_HUMAN",
+    "DRD2_SHORT"
+  ],
+  "entity_ids": [
+    "a7dd6fae-1133-45e4-9df5-9aa71b1e5988",
+    "88abce2d-695a-46dc-b39a-c4a5f8524ad5",
+    "f1981142-6c01-4dd2-b505-e676fcb8ecce"
+  ],
+  "metadata": {
+    "artifact_path": "sequence/fasta/datasets/lambda_gpcr_sequences.fasta",
+    "sequence_count": 3,
+    "materialized": true,
+    "sequence_ids": [
+      "ADRB2_HUMAN",
+      "A2AR_HUMAN",
+      "DRD2_SHORT"
+    ],
+    "source": "model_lambda_via_tools",
+    "protein_family": "gpcr_a"
+  },
+  "created": "2025-11-12T14:18:19.457561",
+  "modified": "2025-11-12T14:18:19.457574"
+}

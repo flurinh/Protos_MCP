@@ -105,8 +105,9 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         download = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=STRUCTURE_IDS,
+            processor_type="structure",
             dataset_name=STRUCTURE_DATASET,
             create_dataset=True,
             overwrite=False,
@@ -121,201 +122,25 @@ async def run_workflow() -> Dict[str, Any]:
         if not structure_entities:
             raise RuntimeError("No structures registered; aborting GRN workflow")
 
-        register = await call(
-            "structure_register_chain_sequences_from_dataset",
-            dataset_name=STRUCTURE_DATASET,
-            dataset_prefix=CHAIN_DATASET_PREFIX,
-            create_dataset=True,
-            overwrite=True,
-            one_letter=True,
-            min_length=1,
-        )
-        register_data = register.get("data", {}) if isinstance(register, dict) else {}
-        registered_sequences = sorted(set(register_data.get("registered_entities", [])))
-        if not registered_sequences:
-            raise RuntimeError("No chain sequences registered from structures")
-
-        sequence_lengths: Dict[str, int] = {}
-        alignment_metrics: Dict[str, Dict[str, Any]] = {}
-        filtered_sequences: List[str] = []
-
-        for seq_id in registered_sequences:
-            seq_resp = await call("load_sequence", sequence_id=seq_id, include_sequence=True)
-            seq_data = seq_resp.get("data", {}) if isinstance(seq_resp, dict) else {}
-            sequence = seq_data.get("sequence")
-            if sequence is None:
-                full_seqs = seq_data.get("full_sequences")
-                if isinstance(full_seqs, dict) and full_seqs:
-                    sequence = next(iter(full_seqs.values()))
-            if not sequence:
-                continue
-            sequence_lengths[seq_id] = len(sequence)
-
-        if REFERENCE_SEQUENCE not in sequence_lengths:
-            ref_resp = await call("load_sequence", sequence_id=REFERENCE_SEQUENCE, include_sequence=True)
-            ref_data = ref_resp.get("data", {}) if isinstance(ref_resp, dict) else {}
-            ref_sequence = ref_data.get("sequence")
-            if ref_sequence is None:
-                full = ref_data.get("full_sequences")
-                if isinstance(full, dict) and full:
-                    ref_sequence = next(iter(full.values()))
-            if not ref_sequence:
-                raise RuntimeError(f"Reference sequence {REFERENCE_SEQUENCE} not available in registry")
-            sequence_lengths[REFERENCE_SEQUENCE] = len(ref_sequence)
-
-        for seq_id in registered_sequences:
-            align_resp = await call(
-                "align_sequences_by_id",
-                entity1=seq_id,
-                entity2=REFERENCE_SEQUENCE,
-                alignment_method="blosum62",
-            )
-            align_data = align_resp.get("data", align_resp) if isinstance(align_resp, dict) else {}
-            score = align_data.get("score")
-            length = sequence_lengths.get(seq_id)
-            normalized = None
-            if score is not None and length:
-                normalized = float(score) / max(float(length), 1.0)
-            alignment_metrics[seq_id] = {
-                "score": score,
-                "normalized": normalized,
-                "length": length,
-                "reference": REFERENCE_SEQUENCE,
-            }
-            if seq_id == REFERENCE_SEQUENCE or (normalized is not None and normalized >= ALIGNMENT_THRESHOLD):
-                filtered_sequences.append(seq_id)
-
-        filtered_sequences = sorted(set(filtered_sequences))
-        excluded_sequences = sorted(set(registered_sequences) - set(filtered_sequences))
-        if not filtered_sequences:
-            raise RuntimeError("Alignment threshold removed all chain sequences")
-
-        datasets_resp = await call("list_datasets", processor_type="sequence")
-        known_datasets = datasets_resp.get("data", {}).get("datasets", []) or []
-        metadata_payload = {
-            "source": "structure_grn_annotation_via_tools",
-            "reference_sequence": REFERENCE_SEQUENCE,
-            "threshold": ALIGNMENT_THRESHOLD,
-            "entity_count": len(filtered_sequences),
-        }
-        if FILTERED_DATASET in known_datasets:
-            existing_resp = await call("dataset_entities", name=FILTERED_DATASET, processor_type="sequence")
-            existing_entities = existing_resp.get("data", {}).get("entities", []) or []
-            to_add = sorted(set(filtered_sequences) - set(existing_entities))
-            to_remove = sorted(set(existing_entities) - set(filtered_sequences))
-            await call(
-                "update_dataset",
-                name=FILTERED_DATASET,
-                processor_type="sequence",
-                add_entities=to_add or None,
-                remove_entities=to_remove or None,
-                metadata=metadata_payload,
-            )
-        else:
-            await call(
-                "create_dataset",
-                name=FILTERED_DATASET,
-                entities=filtered_sequences,
-                processor_type="sequence",
-                metadata=metadata_payload,
-            )
-
-        structure_chain_map: Dict[str, List[str]] = {}
-        for seq_id in filtered_sequences:
-            if "_chain_" not in seq_id:
-                continue
-            struct_id, chain_id = seq_id.split("_chain_", 1)
-            structure_chain_map.setdefault(struct_id, []).append(chain_id)
-
-        filtered_structure_entities: List[str] = []
-        for struct_id, chain_ids in structure_chain_map.items():
-            filter_resp = await call(
-                "structure_filter_entities",
-                structure_ids=[struct_id],
-                filters=[
-                    {
-                        "column": "auth_chain_id",
-                        "op": "in",
-                        "values": chain_ids,
-                    }
-                ],
-                save_as="{structure_id}_grn_filtered",
-                drop_empty=False,
-                return_preview=False,
-            )
-            filter_data = filter_resp.get("data", filter_resp)
-            filter_results = filter_data.get("results", [])
-            if not filter_results:
-                continue
-            saved_entity = filter_results[0].get("saved_entity") or struct_id
-            filtered_structure_entities.append(saved_entity)
-
-        if not filtered_structure_entities:
-            raise RuntimeError("Filtering produced no structure entities; cannot continue")
-
-        structure_dataset_payload: Dict[str, Any]
-        datasets_resp = await call("list_datasets", processor_type="structure")
-        known_structure_datasets = datasets_resp.get("data", {}).get("datasets", []) or []
-        structure_metadata = {
-            "source": "structure_grn_annotation_via_tools",
-            "reference_sequence": REFERENCE_SEQUENCE,
-            "threshold": ALIGNMENT_THRESHOLD,
-            "entity_count": len(filtered_structure_entities),
-        }
-        if FILTERED_STRUCTURE_DATASET in known_structure_datasets:
-            existing_structures_resp = await call(
-                "dataset_entities",
-                name=FILTERED_STRUCTURE_DATASET,
-                processor_type="structure",
-            )
-            existing_structures = existing_structures_resp.get("data", {}).get("entities", []) or []
-            to_add = sorted(set(filtered_structure_entities) - set(existing_structures))
-            to_remove = sorted(set(existing_structures) - set(filtered_structure_entities))
-            await call(
-                "update_dataset",
-                name=FILTERED_STRUCTURE_DATASET,
-                processor_type="structure",
-                add_entities=to_add or None,
-                remove_entities=to_remove or None,
-                metadata=structure_metadata,
-            )
-            structure_dataset_payload = await call(
-                "dataset_info",
-                name=FILTERED_STRUCTURE_DATASET,
-                processor_type="structure",
-            )
-        else:
-            structure_dataset_payload = await call(
-                "create_dataset",
-                name=FILTERED_STRUCTURE_DATASET,
-                entities=filtered_structure_entities,
-                processor_type="structure",
-                metadata=structure_metadata,
-            )
-
-        grn_annotation = await call(
-            "sequence_annotate_with_grn",
+        grn_pipeline = await call(
+            "structure_prepare_grn_annotations",
+            structure_ids=STRUCTURE_IDS,
             reference_table=REFERENCE_TABLE,
             protein_family=PROTEIN_FAMILY,
-            entity_names=filtered_sequences,
-            output_table=f"{FILTERED_DATASET}_grn",
-            allow_create=True,
-            metadata={"source": "structure_grn_annotation_via_tools"},
-        )
-        grn_data = grn_annotation.get("data", {}) if isinstance(grn_annotation, dict) else {}
-        grn_table_name = grn_data.get("output_table") or f"{FILTERED_DATASET}_grn"
-
-        apply_grn = await call(
-            "structure_apply_grn_annotations",
-            grn_table=grn_table_name,
-            structures=filtered_structure_entities,
+            reference_sequence_entity=REFERENCE_SEQUENCE,
+            alignment_threshold=ALIGNMENT_THRESHOLD,
+            chain_dataset_prefix=CHAIN_DATASET_PREFIX,
+            filtered_sequence_dataset=FILTERED_DATASET,
+            grn_table_name=f"{FILTERED_DATASET}_grn",
             column_name="grn",
-            save_entities=True,
         )
+        grn_data = grn_pipeline.get("data", {}) if isinstance(grn_pipeline, dict) else {}
+        grn_table_name = grn_data.get("grn_table") or f"{FILTERED_DATASET}_grn"
+        apply_grn = grn_data.get("structure_annotation_summary")
 
         dataset_summary = await call(
             "load_sequence_dataset",
-            dataset_name=FILTERED_DATASET,
+            dataset_name=grn_data.get("filtered_dataset", FILTERED_DATASET),
             include_sequences=False,
         )
 
@@ -323,16 +148,10 @@ async def run_workflow() -> Dict[str, Any]:
             "data_root": data_root,
             "download": download,
             "structures": structure_entities,
-            "registered_sequences": registered_sequences,
-            "filtered_sequences": filtered_sequences,
-            "excluded_sequences": excluded_sequences,
-            "alignment_metrics": alignment_metrics,
-            "filtered_structures": filtered_structure_entities,
-            "grn_annotation": grn_annotation,
+            "grn_pipeline": grn_pipeline,
             "apply_grn": apply_grn,
             "sequence_dataset": dataset_summary,
             "grn_table": grn_table_name,
-            "filtered_structure_dataset": structure_dataset_payload,
         }
 
 
@@ -341,40 +160,27 @@ def summarize(result: Dict[str, Any]) -> None:
     print("=" * 51)
 
     print("Structures:", result.get("structures"))
-    print("Registered chains:", result.get("registered_sequences"))
-    print("Filtered GPCR-like chains:", result.get("filtered_sequences"))
-    excluded = result.get("excluded_sequences") or []
-    if excluded:
-        print("Excluded chains:", excluded)
-    filtered_structs = result.get("filtered_structures") or []
-    if filtered_structs:
-        print("Filtered structure entities:", filtered_structs)
-    metrics = result.get("alignment_metrics") or {}
-    if metrics:
-        print("Alignment metric (normalized score):")
-        for seq_id, payload in metrics.items():
-            norm = payload.get("normalized")
-            if isinstance(norm, (int, float)):
-                print(f"  {seq_id}: {norm:.3f}")
-            else:
-                print(f"  {seq_id}: n/a")
-    grn = result.get("grn_annotation", {}).get("data", {})
-    if grn:
-        summary = grn.get("summary", {})
-        print("GRN summary:", summary.get("global") or summary)
-    apply_grn = result.get("apply_grn", {}).get("data", {})
+    pipeline = result.get("grn_pipeline", {}).get("data", {})
+    if pipeline:
+        print("Filtered GPCR-like chains:", pipeline.get("filtered_sequences"))
+        metrics = pipeline.get("alignment_metrics") or {}
+        if metrics:
+            sample = list(metrics.items())[:5]
+            print("Alignment metric sample (normalized score):", sample)
+        print("Filtered sequence dataset:", pipeline.get("filtered_dataset"))
+    apply_grn = result.get("apply_grn") or {}
     if apply_grn:
         print("Annotated residues per structure:", apply_grn.get("annotation_counts"))
         if apply_grn.get("skipped"):
             print("Skipped chains:", apply_grn.get("skipped"))
     dataset_info = result.get("sequence_dataset", {}).get("data", {})
     if dataset_info:
-        print("Filtered sequence dataset:", dataset_info.get("dataset_name"), "entities=", dataset_info.get("entity_count"))
-    structure_dataset_info = result.get("filtered_structure_dataset", {}).get("data", {})
-    if structure_dataset_info:
-        dataset_name = structure_dataset_info.get("name") or structure_dataset_info.get("dataset_name")
-        entity_count = structure_dataset_info.get("entity_count")
-        print("Filtered structure dataset:", dataset_name, "entities=", entity_count)
+        print(
+            "Filtered sequence dataset summary:",
+            dataset_info.get("dataset_name"),
+            "entities=",
+            dataset_info.get("entity_count"),
+        )
     print("GRN table:", result.get("grn_table"))
 
 

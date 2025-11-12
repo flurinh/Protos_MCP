@@ -15,7 +15,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mcp.server.fastmcp import Context
-
 from mcp_server.config import ServerConfig
 from mcp_server.runtime import create_server
 
@@ -108,8 +107,9 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         download = await call(
-            "structure_download_batch",
+            "download_entities",
             identifiers=STRUCTURE_IDS,
+            processor_type="structure",
             dataset_name=STRUCTURE_DATASET,
             create_dataset=True,
             overwrite=False,

@@ -25,6 +25,98 @@ from protos.analysis.structure_embedding_similarity import (
 class StructureAnalysisTools(BaseTool):
     """Tools for structure analysis and manipulation."""
     
+    @staticmethod
+    def _normalize_structure_id(structure_id: str) -> str:
+        return structure_id.lower().strip()
+
+    def _apply_grn_annotations(
+        self,
+        *,
+        grn_table: str,
+        structures: List[str],
+        column_name: str = "grn",
+        save_entities: bool = True,
+    ) -> Dict[str, Any]:
+        struct_proc = self.get_processor("structure")
+        grn_proc = self.get_processor("grn")
+        normalized_structures = [self._normalize_structure_id(s) for s in structures]
+        table = grn_proc.load_table(grn_table).fillna("-")
+
+        annotation_counts: Dict[str, Dict[str, int]] = {}
+        skipped: Dict[str, str] = {}
+
+        for structure_id in normalized_structures:
+            frame = struct_proc.load_entity(structure_id)
+            if frame is None:
+                skipped[structure_id] = "structure_not_found"
+                continue
+
+            reset = frame.reset_index()
+            if column_name not in reset.columns:
+                reset[column_name] = "-"
+            else:
+                reset[column_name] = reset[column_name].fillna("-")
+
+            chains = reset.get("auth_chain_id")
+            if chains is None:
+                skipped[structure_id] = "missing_chain_column"
+                continue
+
+            chain_stats: Dict[str, int] = {}
+            for chain_id in chains.dropna().unique().tolist():
+                seq_name = f"{structure_id}_chain_{chain_id}"
+                if seq_name not in table.index:
+                    skipped[seq_name] = "sequence_not_in_grn_table"
+                    continue
+
+                row = table.loc[seq_name]
+                seq_pos_to_grn: Dict[int, str] = {}
+                for grn_pos, value in row.items():
+                    if not isinstance(value, str) or value.strip() in {"", "-"}:
+                        continue
+                    digits = "".join(filter(str.isdigit, value))
+                    if not digits:
+                        continue
+                    seq_pos = int(digits)
+                    if seq_pos > 0:
+                        seq_pos_to_grn[seq_pos] = grn_pos
+
+                chain_df = reset[reset["auth_chain_id"] == chain_id].copy()
+                chain_df[column_name] = chain_df[column_name].fillna("-")
+
+                residue_positions = (
+                    chain_df.groupby(["auth_seq_id", "insertion"]).first().reset_index()
+                )
+
+                assigned = 0
+                for _, residue in residue_positions.iterrows():
+                    seq_pos = residue["auth_seq_id"]
+                    grn_label = seq_pos_to_grn.get(int(seq_pos), "-")
+                    mask = (
+                        (chain_df["auth_seq_id"] == seq_pos)
+                        & (chain_df["insertion"] == residue["insertion"])
+                    )
+                    chain_df.loc[mask, column_name] = grn_label
+                    if grn_label != "-":
+                        assigned += 1
+
+                reset.loc[chain_df.index, column_name] = chain_df[column_name]
+                chain_stats[chain_id] = assigned
+
+            annotation_counts[structure_id] = chain_stats
+
+            if save_entities:
+                struct_proc.save_entity(structure_id, reset)
+
+        return {
+            "grn_table": grn_table,
+            "structures": normalized_structures,
+            "column": column_name,
+            "annotation_counts": annotation_counts,
+            "skipped": skipped,
+            "saved": save_entities,
+        }
+
     def _ensure_structures_loaded(self, processor, structure_ids: Union[str, List[str]]) -> None:
         """Load structures via the processor's load_entity API."""
 
@@ -80,7 +172,7 @@ class StructureAnalysisTools(BaseTool):
                 if df is None:
                     return self.format_error(
                         f"Structure '{structure_id}' not found",
-                        "Use structure_download or structure_download_batch first.",
+                        "Use download_entity or download_entities first.",
                     )
 
                 reset = df.reset_index()
@@ -130,7 +222,7 @@ class StructureAnalysisTools(BaseTool):
                 if not manager.dataset_exists(dataset_name):
                     return self.format_error(
                         f"Structure dataset '{dataset_name}' not found",
-                        "Use dataset.list_datasets or structure_download_batch to populate it.",
+                        "Use dataset.list_datasets or download_entities to populate it.",
                     )
 
                 entities = manager.get_dataset_entities(dataset_name)
@@ -631,85 +723,216 @@ class StructureAnalysisTools(BaseTool):
                         "Pass one or more structure IDs to annotate",
                     )
 
-                struct_proc = self.get_processor("structure")
-                grn_proc = self.get_processor("grn")
-                table = grn_proc.load_table(grn_table).fillna('-')
-
-                annotation_counts: Dict[str, Dict[str, int]] = {}
-                skipped: Dict[str, str] = {}
-
-                for structure_id in structures:
-                    frame = struct_proc.load_entity(structure_id)
-                    if frame is None:
-                        skipped[structure_id] = "structure_not_found"
-                        continue
-
-                    reset = frame.reset_index()
-                    if column_name not in reset.columns:
-                        reset[column_name] = '-'
-                    else:
-                        reset[column_name] = reset[column_name].fillna('-')
-                    chains = reset['auth_chain_id'].unique().tolist()
-                    chain_stats: Dict[str, int] = {}
-
-                    for chain_id in chains:
-                        seq_name = f"{structure_id}_chain_{chain_id}"
-                        if seq_name not in table.index:
-                            skipped[seq_name] = "sequence_not_in_grn_table"
-                            continue
-
-                        row = table.loc[seq_name]
-                        seq_pos_to_grn: Dict[int, str] = {}
-                        for grn_pos, value in row.items():
-                            if not isinstance(value, str) or value in {'-', ''}:
-                                continue
-                            digits = ''.join(filter(str.isdigit, value))
-                            if not digits:
-                                continue
-                            seq_pos = int(digits)
-                            if seq_pos > 0:
-                                seq_pos_to_grn[seq_pos] = grn_pos
-
-                        chain_df = reset[reset['auth_chain_id'] == chain_id].copy()
-                        chain_df[column_name] = chain_df[column_name].fillna('-')
-
-                        residue_positions = (
-                            chain_df.groupby(['auth_seq_id', 'insertion']).first().reset_index()
-                        )
-
-                        assigned = 0
-                        for _, residue in residue_positions.iterrows():
-                            seq_pos = residue['auth_seq_id']
-                            grn_label = seq_pos_to_grn.get(int(seq_pos), '-')
-                            mask = (
-                                (chain_df['auth_seq_id'] == seq_pos)
-                                & (chain_df['insertion'] == residue['insertion'])
-                            )
-                            chain_df.loc[mask, column_name] = grn_label
-                            if grn_label != '-':
-                                assigned += 1
-
-                        reset.loc[chain_df.index, column_name] = chain_df[column_name]
-                        chain_stats[chain_id] = assigned
-
-                    annotation_counts[structure_id] = chain_stats
-
-                    if save_entities:
-                        struct_proc.save_entity(structure_id, reset)
-
-                return self.format_success(
-                    {
-                        "grn_table": grn_table,
-                        "structures": structures,
-                        "column": column_name,
-                        "annotation_counts": annotation_counts,
-                        "skipped": skipped,
-                        "saved": save_entities,
-                    }
+                result = self._apply_grn_annotations(
+                    grn_table=grn_table,
+                    structures=structures,
+                    column_name=column_name,
+                    save_entities=save_entities,
                 )
+
+                return self.format_success(result)
 
             except Exception as exc:  # noqa: BLE001
                 return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=structure_apply_grn_annotations,
+            name="structure_apply_grn_annotations",
+            description="Map a saved GRN table back onto one or more structure entities, writing the results to a column (default 'grn').",
+            parameters=[
+                {"name": "grn_table", "type": "str"},
+                {"name": "structures", "type": "list[str]"},
+                {"name": "column_name", "type": "str", "default": "grn"},
+                {"name": "save_entities", "type": "bool", "default": True},
+            ],
+            returns={"fields": ["annotation_counts", "skipped"]},
+            tags=["structure", "grn"],
+        )
+
+        @server.tool()
+        def structure_prepare_grn_annotations(
+            ctx,
+            structure_ids: List[str],
+            reference_table: str,
+            protein_family: str,
+            reference_sequence_entity: Optional[str] = None,
+            reference_sequence: Optional[str] = None,
+            alignment_threshold: float = 0.75,
+            chain_dataset_prefix: Optional[str] = None,
+            filtered_sequence_dataset: Optional[str] = None,
+            grn_table_name: Optional[str] = None,
+            column_name: str = "grn",
+            save_entities: bool = True,
+        ) -> Dict:
+            """Full GRN annotation pipeline for a set of structures."""
+
+            try:
+                if error := self.validate_required_params(
+                    {
+                        "structure_ids": structure_ids,
+                        "reference_table": reference_table,
+                        "protein_family": protein_family,
+                    },
+                    ["structure_ids", "reference_table", "protein_family"],
+                ):
+                    return error
+
+                if not structure_ids:
+                    return self.format_error(
+                        "No structures provided",
+                        "Pass one or more structure IDs to annotate",
+                    )
+
+                struct_proc = self.get_processor("structure")
+                seq_proc = self.get_processor("sequence")
+
+                normalized_structures = [self._normalize_structure_id(s) for s in structure_ids]
+                missing = [sid for sid in normalized_structures if struct_proc.load_entity(sid) is None]
+                if missing:
+                    return self.format_error(
+                        f"Structures missing: {', '.join(missing)}",
+                        "Download the structures before running GRN annotation.",
+                    )
+
+                chain_prefix = chain_dataset_prefix or "grn_chain_dataset"
+                registration = struct_proc.register_chain_sequences(
+                    normalized_structures,
+                    dataset_prefix=chain_prefix,
+                    create_dataset=True,
+                    overwrite=True,
+                )
+
+                chain_entities: List[str] = []
+                for summary in registration.values():
+                    chain_entities.extend(summary.get("registered_entities", []))
+
+                if not chain_entities:
+                    return self.format_error(
+                        "No chain sequences were registered",
+                        "Ensure the structures contain protein chains with resolvable sequences.",
+                    )
+
+                sequence_cache: Dict[str, str] = {}
+                for entity in chain_entities:
+                    data = seq_proc.load_entity(entity)
+                    if isinstance(data, dict):
+                        data = next((value for value in data.values() if isinstance(value, str)), None)
+                    if isinstance(data, str):
+                        sequence_cache[entity] = data
+
+                if not sequence_cache:
+                    return self.format_error(
+                        "Unable to load chain sequences",
+                        "Sequence processor returned empty payloads for the registered chains.",
+                    )
+
+                ref_sequence_value = reference_sequence
+                ref_entity = reference_sequence_entity or next(iter(sequence_cache))
+                if ref_sequence_value is None:
+                    ref_data = sequence_cache.get(ref_entity) or seq_proc.load_entity(ref_entity)
+                    if isinstance(ref_data, dict):
+                        ref_data = next((value for value in ref_data.values() if isinstance(value, str)), None)
+                    if not isinstance(ref_data, str):
+                        return self.format_error(
+                            f"Reference sequence '{ref_entity}' unavailable",
+                            "Provide reference_sequence or reference_sequence_entity with a registered chain.",
+                        )
+                    ref_sequence_value = ref_data
+
+                alignment_metrics: Dict[str, Dict[str, Any]] = {}
+                filtered_entities: List[str] = []
+
+                for entity, sequence in sequence_cache.items():
+                    score, _ = seq_proc.align_sequences(
+                        sequence,
+                        ref_sequence_value,
+                        seq1_id=entity,
+                        seq2_id=ref_entity,
+                        store_alignment=False,
+                    )
+                    max_len = max(len(sequence), len(ref_sequence_value)) or 1
+                    normalized = float(score) / float(max_len)
+                    alignment_metrics[entity] = {
+                        "score": float(score),
+                        "normalized": round(normalized, 4),
+                        "length": len(sequence),
+                    }
+                    if normalized >= alignment_threshold or entity == ref_entity:
+                        filtered_entities.append(entity)
+
+                if not filtered_entities:
+                    best = max(
+                        alignment_metrics.items(),
+                        key=lambda item: item[1]["normalized"],
+                    )[0]
+                    filtered_entities.append(best)
+
+                filtered_dataset = filtered_sequence_dataset or f"{chain_prefix}_filtered"
+                manager = seq_proc.dataset_manager
+                if manager.dataset_exists(filtered_dataset):
+                    manager.delete_dataset(filtered_dataset)
+                seq_proc.create_dataset(
+                    filtered_dataset,
+                    filtered_entities,
+                    metadata={
+                        "source": "structure_prepare_grn_annotations",
+                        "reference_sequence": ref_entity,
+                        "threshold": alignment_threshold,
+                        "entity_count": len(filtered_entities),
+                    },
+                )
+
+                grn_table = grn_table_name or f"{filtered_dataset}_grn"
+                annotations, summary = seq_proc.annotate_with_grn(
+                    dataset_name=filtered_dataset,
+                    reference_table=reference_table,
+                    protein_family=protein_family,
+                    output_table=grn_table,
+                    allow_create=True,
+                    metadata={"source": "structure_prepare_grn_annotations"},
+                    return_summary=True,
+                )
+
+                apply_result = self._apply_grn_annotations(
+                    grn_table=grn_table,
+                    structures=normalized_structures,
+                    column_name=column_name,
+                    save_entities=save_entities,
+                )
+
+                payload = {
+                    "structures": normalized_structures,
+                    "chain_entities": sorted(sequence_cache.keys()),
+                    "filtered_sequences": filtered_entities,
+                    "filtered_dataset": filtered_dataset,
+                    "alignment_threshold": alignment_threshold,
+                    "alignment_metrics": alignment_metrics,
+                    "reference_sequence": ref_entity,
+                    "grn_table": grn_table,
+                    "sequence_annotation_summary": summary,
+                    "structure_annotation_summary": apply_result,
+                    "annotation_rows": len(annotations),
+                }
+
+                return self.format_success(payload, message="GRN annotations applied")
+
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=structure_prepare_grn_annotations,
+            name="structure_prepare_grn_annotations",
+            description="Extract chains, filter/align them, annotate with GRN, and map the GRN labels back onto the provided structures in one call.",
+            parameters=[
+                {"name": "structure_ids", "type": "list[str]"},
+                {"name": "reference_table", "type": "str"},
+                {"name": "protein_family", "type": "str"},
+                {"name": "reference_sequence_entity", "type": "str", "optional": True},
+                {"name": "alignment_threshold", "type": "float", "default": 0.75},
+            ],
+            returns={"fields": ["filtered_dataset", "grn_table", "structure_annotation_summary"]},
+            tags=["structure", "grn", "workflow"],
+        )
 
         @server.tool()
         def extract_sequence_from_structure(ctx, pdb_id: str,
@@ -2397,7 +2620,7 @@ class StructureAnalysisTools(BaseTool):
                 if missing:
                     return self.format_error(
                         f"Structures not available: {', '.join(missing)}",
-                        "Download structures first with structure_download or structure_download_batch.",
+                        "Download structures first with download_entity or download_entities.",
                     )
 
                 summary_metadata = {

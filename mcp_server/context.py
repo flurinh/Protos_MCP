@@ -27,6 +27,8 @@ except ImportError as e:
 
 from .config import ServerConfig
 from .core.exceptions import ProcessorInitializationError
+from .core.session import SessionState
+from .core.tool_catalog import ToolCatalog
 
 
 @dataclass
@@ -35,6 +37,8 @@ class ServerContext:
 
     config: ServerConfig
     processors: Dict[str, BaseProcessor] = field(default_factory=dict)
+    session_state: SessionState = field(default_factory=SessionState)
+    tool_catalog: ToolCatalog = field(default_factory=ToolCatalog)
     _paths: Optional[ProtosPaths] = field(default=None, init=False, repr=False)
     _entity_registry: Optional[EntityRegistry] = field(default=None, init=False, repr=False)
     _protos_ready: bool = field(default=False, init=False, repr=False)
@@ -134,11 +138,22 @@ class ServerContext:
     def set_processor(self, processor_type: str, processor: BaseProcessor):
         """Store processor instance in cache."""
         self.processors[processor_type] = processor
-    
+
     def clear_processor_cache(self):
         """Clear all cached processors."""
         self.processors.clear()
-    
+
+    @property
+    def session(self) -> SessionState:
+        """Access the current session state object."""
+
+        return self.session_state
+
+    def reset_session(self) -> None:
+        """Reset recorded session artifacts and history."""
+
+        self.session_state.reset()
+
     def get_stats(self) -> Dict[str, Any]:
         """Get server statistics."""
         stats = {
@@ -148,6 +163,11 @@ class ServerContext:
             "initialized": self._protos_ready,
             "data_root_exists": self.config.data_root.exists(),
             "entity_count": 0,
+            "session": self.session_state.snapshot(),
+            "tool_catalog": {
+                "tool_count": len(self.tool_catalog.to_dict()["tools"]),
+                "groups": self.tool_catalog.list_groups(),
+            },
         }
 
         if self._entity_registry and hasattr(self._entity_registry, "list_entities"):

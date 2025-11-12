@@ -8,8 +8,15 @@ from typing import Any, Dict, Iterable, List, Optional
 import importlib
 
 import protos.models
-from protos.models.model_manager import ModelManager
-from protos.models.model_specs import ArtifactSpec, ModelCard
+from protos.models.model_manager import ModelManager, prepare_mutation_screen
+from protos.models.model_specs import (
+    ArtifactBundle,
+    ArtifactSpec,
+    ModelBatch,
+    ModelCard,
+    ModelInvocation,
+    RuntimeResult,
+)
 from protos.processing.property import PropertyProcessor
 from protos.processing.sequence import SequenceProcessor
 
@@ -37,7 +44,9 @@ class ModelManagerTools(BaseTool):
     def __init__(self, context) -> None:
         super().__init__(context)
         self._manager: Optional[ModelManager] = None
-        self._lambda_runtime = importlib.import_module("protos.models.lambda.runtime_utils")
+        self._lambda_runtime = importlib.import_module(
+            "protos.models.lambda.runtime_utils"
+        )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -80,12 +89,131 @@ class ModelManagerTools(BaseTool):
             "description": card.description,
             "execution": execution,
             "input_spec": [self._artifact_spec_dict(spec) for spec in card.input_spec],
-            "output_spec": [self._artifact_spec_dict(spec) for spec in card.output_spec],
+            "output_spec": [
+                self._artifact_spec_dict(spec) for spec in card.output_spec
+            ],
             "metadata": card.metadata,
         }
 
+    def _serialize_invocation(self, invocation: ModelInvocation) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": invocation.model,
+            "metadata": dict(invocation.metadata or {}),
+        }
+
+        if invocation.job is not None:
+            job = invocation.job
+            artifacts: List[Dict[str, Any]] = []
+            for bundle in job.artifacts:
+                artifacts.append(
+                    {
+                        "name": bundle.spec.name,
+                        "kind": bundle.spec.kind,
+                        "path": str(bundle.path) if bundle.path else None,
+                        "metadata": bundle.metadata,
+                    }
+                )
+            payload["job"] = {
+                "command": job.command,
+                "working_dir": str(job.working_dir) if job.working_dir else None,
+                "artifacts": artifacts,
+            }
+
+        if invocation.runtime is not None:
+            runtime = invocation.runtime
+            payload["runtime"] = {
+                "metadata": dict(runtime.metadata or {}),
+                "outputs": {
+                    key: (value.shape if hasattr(value, "shape") else None)
+                    for key, value in (runtime.outputs or {}).items()
+                },
+            }
+
+        if invocation.outputs:
+            payload["outputs"] = [
+                {
+                    "name": bundle.spec.name,
+                    "kind": bundle.spec.kind,
+                    "provider": bundle.spec.provider,
+                    "format": bundle.spec.format,
+                    "path": str(bundle.path),
+                    "metadata": bundle.metadata,
+                }
+                for bundle in invocation.outputs
+            ]
+
+        return payload
+
+    def _invocation_from_payload(self, payload: Dict[str, Any]) -> ModelInvocation:
+        if not payload:
+            raise InvalidInputError(
+                "invocation",
+                "Invocation payload is required",
+                "Pass the 'data' field returned by a model preparation tool.",
+            )
+
+        model_name = payload.get("model")
+        if not model_name:
+            raise InvalidInputError(
+                "invocation",
+                "Invocation payload missing model name",
+                "Include the 'model' value from the prepare response.",
+            )
+
+        manager = self._get_manager()
+        card = manager.cards.get(model_name)
+        if card is None:
+            raise InvalidInputError(
+                "invocation",
+                f"Model '{model_name}' is not registered",
+                "Call list_models to inspect available model names.",
+            )
+
+        runtime_payload = payload.get("runtime") or {}
+        runtime_metadata = dict(runtime_payload.get("metadata") or {})
+        runtime_outputs = dict(runtime_payload.get("outputs") or {})
+        runtime_result = None
+        if runtime_metadata or runtime_outputs:
+            runtime_result = RuntimeResult(
+                outputs=runtime_outputs,
+                artifacts=[],
+                metadata=runtime_metadata,
+            )
+
+        bundles: List[ArtifactBundle] = []
+        for bundle_payload in payload.get("outputs", []):
+            bundle_path = bundle_payload.get("path")
+            if not bundle_path:
+                continue
+            spec = ArtifactSpec(
+                name=bundle_payload.get("name", "artifact"),
+                kind=bundle_payload.get("kind", "file"),
+                provider=bundle_payload.get("provider", "model_manager"),
+                format=bundle_payload.get("format"),
+            )
+            bundles.append(
+                ArtifactBundle(
+                    spec=spec,
+                    path=Path(bundle_path),
+                    metadata=bundle_payload.get("metadata", {}),
+                )
+            )
+
+        return ModelInvocation(
+            model=model_name,
+            card=card,
+            runtime=runtime_result,
+            outputs=bundles,
+            metadata=dict(payload.get("metadata", {})),
+        )
+
     def _lambda_config_dir(self) -> Path:
-        return Path(protos.models.__file__).resolve().parent / "lambda" / "lmda" / "configs"
+        return (
+            Path(protos.models.__file__).resolve().parent
+            / "lambda"
+            / "lmda"
+            / "configs"
+        )
 
     def _stage_lambda_resources(self) -> Dict[str, Path]:
         data_root = Path(self.paths.data_root)
@@ -121,7 +249,9 @@ class ModelManagerTools(BaseTool):
         return f"{family_slug}_lambda_{timestamp}"
 
     @staticmethod
-    def _preview_sequences(sequence_map: Dict[str, str], *, limit: int = 5) -> Dict[str, str]:
+    def _preview_sequences(
+        sequence_map: Dict[str, str], *, limit: int = 5
+    ) -> Dict[str, str]:
         preview: Dict[str, str] = {}
         for name in list(sequence_map.keys())[:limit]:
             seq = sequence_map[name]
@@ -236,9 +366,8 @@ class ModelManagerTools(BaseTool):
 
         if normalized_sequences:
             dataset_key = sequence_dataset or self._default_dataset_name(protein_family)
-            if (
-                not overwrite_dataset
-                and seq_proc.dataset_manager.dataset_exists(dataset_key)
+            if not overwrite_dataset and seq_proc.dataset_manager.dataset_exists(
+                dataset_key
             ):
                 raise InvalidInputError(
                     "sequence_dataset",
@@ -376,9 +505,7 @@ class ModelManagerTools(BaseTool):
         predictions = runtime.outputs.get("predictions") if runtime.outputs else None
         attention = runtime.outputs.get("attention") if runtime.outputs else None
         property_table_name = (
-            runtime.metadata.get("property_table")
-            if runtime.metadata
-            else None
+            runtime.metadata.get("property_table") if runtime.metadata else None
         )
 
         row_count = 0
@@ -398,13 +525,15 @@ class ModelManagerTools(BaseTool):
         prop_proc = PropertyProcessor()
         property_path = None
         if property_table_name:
-            property_path = (
-                prop_proc.tables_dir / f"{property_table_name}.csv"
-            )
+            property_path = prop_proc.tables_dir / f"{property_table_name}.csv"
 
         return {
             "run_id": runtime.metadata.get("run_id") if runtime.metadata else None,
-            "protein_family": runtime.metadata.get("protein_family") if runtime.metadata else protein_family,
+            "protein_family": (
+                runtime.metadata.get("protein_family")
+                if runtime.metadata
+                else protein_family
+            ),
             "prediction_row_count": row_count,
             "prediction_columns": columns,
             "predictions_preview": preview_rows,
@@ -412,10 +541,22 @@ class ModelManagerTools(BaseTool):
             "property_table": property_table_name,
             "property_table_path": str(property_path) if property_path else None,
             "work_dir": runtime.metadata.get("work_dir") if runtime.metadata else None,
-            "outputs_dir": runtime.metadata.get("outputs_dir") if runtime.metadata else None,
-            "embedding_dataset": runtime.metadata.get("embedding_dataset") if runtime.metadata else None,
-            "embedding_model": runtime.metadata.get("embedding_model") if runtime.metadata else embedding_model,
-            "embedding_type": runtime.metadata.get("embedding_type") if runtime.metadata else embedding_type,
+            "outputs_dir": (
+                runtime.metadata.get("outputs_dir") if runtime.metadata else None
+            ),
+            "embedding_dataset": (
+                runtime.metadata.get("embedding_dataset") if runtime.metadata else None
+            ),
+            "embedding_model": (
+                runtime.metadata.get("embedding_model")
+                if runtime.metadata
+                else embedding_model
+            ),
+            "embedding_type": (
+                runtime.metadata.get("embedding_type")
+                if runtime.metadata
+                else embedding_type
+            ),
         }
 
     @staticmethod
@@ -484,10 +625,12 @@ class ModelManagerTools(BaseTool):
             try:
                 manager = self._get_manager()
                 cards = [self._card_summary(card) for card in manager.cards.values()]
-                return self.format_success({
-                    "count": len(cards),
-                    "models": cards,
-                })
+                return self.format_success(
+                    {
+                        "count": len(cards),
+                        "models": cards,
+                    }
+                )
             except Exception as exc:  # noqa: BLE001
                 return self.handle_error(exc)
 
@@ -591,11 +734,13 @@ class ModelManagerTools(BaseTool):
                     or len(sequence_map)
                 )
 
-                grn_table_name, grn_row_count, grn_summary = self._prepare_grn_annotations(
-                    seq_proc,
-                    dataset_name,
-                    reference_table=resolved_reference,
-                    protein_family=normalized_family,
+                grn_table_name, grn_row_count, grn_summary = (
+                    self._prepare_grn_annotations(
+                        seq_proc,
+                        dataset_name,
+                        reference_table=resolved_reference,
+                        protein_family=normalized_family,
+                    )
                 )
 
                 staged_resources = self._stage_lambda_resources()
@@ -622,7 +767,9 @@ class ModelManagerTools(BaseTool):
 
                 response = {
                     "sequence_dataset": dataset_name,
-                    "sequence_count": int(sequence_count) if sequence_count is not None else None,
+                    "sequence_count": (
+                        int(sequence_count) if sequence_count is not None else None
+                    ),
                     "sequence_preview": sequence_preview,
                     "dataset_created": dataset_created,
                     "protein_family": normalized_family,
@@ -673,40 +820,312 @@ class ModelManagerTools(BaseTool):
                     config=config,
                     metadata=metadata,
                 )
-
-                payload: Dict[str, Any] = {
-                    "model": model_name,
-                    "metadata": invocation.metadata,
-                }
-
-                if invocation.job is not None:
-                    job = invocation.job
-                    artifacts = []
-                    for bundle in job.artifacts:
-                        artifacts.append(
-                            {
-                                "name": bundle.spec.name,
-                                "kind": bundle.spec.kind,
-                                "path": str(bundle.path) if bundle.path else None,
-                                "metadata": bundle.metadata,
-                            }
-                        )
-                    payload["job"] = {
-                        "command": job.command,
-                        "working_dir": str(job.working_dir) if job.working_dir else None,
-                        "artifacts": artifacts,
-                    }
-
-                if invocation.runtime is not None:
-                    runtime = invocation.runtime
-                    payload["runtime"] = {
-                        "metadata": runtime.metadata,
-                        "outputs": {
-                            key: (value.shape if hasattr(value, "shape") else None)
-                            for key, value in (runtime.outputs or {}).items()
-                        },
-                    }
-
+                payload = self._serialize_invocation(invocation)
                 return self.format_success(payload, message="Model job prepared")
             except Exception as exc:  # noqa: BLE001
                 return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_prepare_job,
+            name="model_prepare_job",
+            description="Low-level wrapper around ModelManager.prepare for arbitrary adapters.",
+            parameters=[
+                {"name": "model_name", "type": "str"},
+                {"name": "inputs", "type": "dict[str,Any]"},
+            ],
+            returns={"fields": ["job", "runtime", "metadata"]},
+            tags=["model", "prepare"],
+        )
+
+        @server.tool()
+        def model_prepare_input(
+            ctx,
+            model_name: str,
+            entity: str,
+            dataset_name: Optional[str] = None,
+            entity_format: str = "sequence",
+            dataset_input_key: Optional[str] = None,
+            inputs: Optional[Dict[str, Any]] = None,
+            config: Optional[Dict[str, Any]] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            """Prepare a single-entity invocation via ModelManager.prepare_input."""
+
+            if not model_name:
+                return self.format_error(
+                    "Model name required",
+                    "Provide a registered model such as 'boltz2' or 'lambda'.",
+                )
+            if not entity:
+                return self.format_error(
+                    "Entity name required",
+                    "Provide the entity identifier inside the referenced dataset.",
+                )
+
+            try:
+                invocation = self._get_manager().prepare_input(
+                    model_name,
+                    entity_name=entity,
+                    entity_format=entity_format,
+                    dataset_name=dataset_name,
+                    dataset_input_key=dataset_input_key,
+                    inputs=inputs,
+                    config=config,
+                    metadata=metadata,
+                )
+                payload = self._serialize_invocation(invocation)
+                return self.format_success(payload, message="Model input prepared")
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_prepare_input,
+            name="model_prepare_input",
+            description="Prepare an invocation for a single entity/dataset pair.",
+            parameters=[
+                {"name": "model_name", "type": "str"},
+                {"name": "entity", "type": "str"},
+                {"name": "dataset_name", "type": "str", "optional": True},
+                {"name": "entity_format", "type": "str", "default": "sequence"},
+            ],
+            tags=["model", "prepare"],
+        )
+
+        @server.tool()
+        def model_prepare_batch(
+            ctx,
+            model_name: str,
+            entity_configs: List[Dict[str, Any]],
+            batch_name: Optional[str] = None,
+            default_entity_format: str = "sequence",
+            base_config: Optional[Dict[str, Any]] = None,
+            batch_metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            """Normalize a batch of entity configs for later execution."""
+
+            if not model_name:
+                return self.format_error(
+                    "Model name required", "Specify the model to batch."
+                )
+            if not entity_configs:
+                return self.format_error(
+                    "No entity configs provided",
+                    "Pass a non-empty list of entity configuration dictionaries.",
+                )
+
+            try:
+                batch = self._get_manager().prepare_batch(
+                    model_name,
+                    entity_configs,
+                    batch_name=batch_name,
+                    default_entity_format=default_entity_format,
+                    base_config=base_config,
+                    batch_metadata=batch_metadata,
+                )
+                return self.format_success(batch.to_dict(), message="Batch prepared")
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_prepare_batch,
+            name="model_prepare_batch",
+            description="Record a batch of entity configs (without executing them).",
+            parameters=[
+                {"name": "model_name", "type": "str"},
+                {"name": "entity_configs", "type": "list[dict]"},
+            ],
+            returns={"fields": ["name", "inputs"]},
+            tags=["model", "batch"],
+        )
+
+        @server.tool()
+        def model_ingest_outputs(
+            ctx,
+            invocation: Optional[Dict[str, Any]] = None,
+            runtime_metadata: Optional[Dict[str, Any]] = None,
+            outputs: Optional[List[Dict[str, Any]]] = None,
+        ) -> Dict[str, Any]:
+            """Register model outputs (property tables, ligands, etc.) with Protos."""
+
+            if invocation is None and runtime_metadata is None and outputs is None:
+                return self.format_error(
+                    "No ingestion payload provided",
+                    "Pass the invocation dictionary and/or explicit outputs to ingest.",
+                )
+
+            try:
+                payload = dict(invocation or {})
+                if runtime_metadata:
+                    runtime = dict(payload.get("runtime") or {})
+                    runtime["metadata"] = runtime_metadata
+                    payload["runtime"] = runtime
+                if outputs is not None:
+                    payload["outputs"] = outputs
+
+                summary = self._get_manager().ingest_outputs(
+                    self._invocation_from_payload(payload)
+                )
+                return self.format_success(summary, message="Outputs ingested")
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_ingest_outputs,
+            name="model_ingest_outputs",
+            description="Ingest property tables or other artifacts referenced by an invocation payload.",
+            parameters=[
+                {"name": "invocation", "type": "dict", "optional": True},
+                {"name": "runtime_metadata", "type": "dict", "optional": True},
+                {"name": "outputs", "type": "list[dict]", "optional": True},
+            ],
+            tags=["model", "ingest"],
+        )
+
+        @server.tool()
+        def model_prepare_mutation_screen(
+            ctx,
+            dataset_name: str,
+            grn_positions: List[str],
+            mutations: List[str],
+            model_name: str = "boltz2",
+            grn_table_name: Optional[str] = None,
+            protein_family: str = "gpcr_a",
+            reference_table: str = "gpcrdb_ref",
+            base_config: Optional[Dict[str, Any]] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            """Prepare Boltz mutation predictions across GRN labels via ModelManager."""
+
+            if not dataset_name:
+                return self.format_error(
+                    "dataset_name required", "Provide a sequence dataset name."
+                )
+            if not grn_positions:
+                return self.format_error(
+                    "grn_positions empty", "Provide at least one GRN label to mutate."
+                )
+            if not mutations:
+                return self.format_error(
+                    "mutations empty",
+                    "Provide the amino acids to scan at each GRN label.",
+                )
+
+            try:
+                seq_proc: SequenceProcessor = self.get_processor("sequence")  # type: ignore[assignment]
+                invocations = prepare_mutation_screen(
+                    seq_proc=seq_proc,
+                    dataset_name=dataset_name,
+                    grn_positions=grn_positions,
+                    mutations=mutations,
+                    grn_table_name=grn_table_name,
+                    protein_family=protein_family,
+                    reference_table=reference_table,
+                    manager=self._get_manager(),
+                    model_name=model_name,
+                    base_config=base_config,
+                    metadata=metadata,
+                )
+                serialized = [self._serialize_invocation(inv) for inv in invocations]
+                return self.format_success(
+                    {"count": len(serialized), "invocations": serialized},
+                    message="Mutation screen prepared",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_prepare_mutation_screen,
+            name="model_prepare_mutation_screen",
+            description="Prepare Boltz-style mutation configs across GRN positions.",
+            parameters=[
+                {"name": "dataset_name", "type": "str"},
+                {"name": "grn_positions", "type": "list[str]"},
+                {"name": "mutations", "type": "list[str]"},
+                {"name": "model_name", "type": "str", "default": "boltz2"},
+            ],
+            tags=["model", "mutations"],
+        )
+
+        @server.tool()
+        def model_prepare_boltz_mutations(
+            ctx,
+            dataset_name: str,
+            mutation_entries: List[Dict[str, Any]],
+            model_name: str = "boltz2",
+            base_config: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            """Prepare Boltz configuration jobs for explicit mutation payloads."""
+
+            if not dataset_name:
+                return self.format_error(
+                    "dataset_name required",
+                    "Provide the sequence dataset containing the source entities.",
+                )
+            if not mutation_entries:
+                return self.format_error(
+                    "mutation_entries required",
+                    "Provide at least one entry with an entity and mutations list.",
+                )
+
+            try:
+                manager = self._get_manager()
+                invocations = manager.prepare_boltz_mutations(
+                    dataset_name,
+                    mutation_entries,
+                    base_config=base_config,
+                    model_name=model_name,
+                )
+                serialized = [self._serialize_invocation(inv) for inv in invocations]
+
+                jobs_summary: List[Dict[str, Any]] = []
+                for invocation in invocations:
+                    metadata = dict(invocation.metadata or {})
+                    entry = dict(metadata.get("mutation_entry") or {})
+                    job_info: Dict[str, Any] = {
+                        "entity": metadata.get("entity") or entry.get("entity"),
+                        "mutations": entry.get("mutations"),
+                        "config_id": metadata.get("config_id"),
+                    }
+                    if invocation.job:
+                        config_path = None
+                        fasta_path = None
+                        for bundle in invocation.job.artifacts:
+                            if bundle.spec.name == "boltz_config" and bundle.path:
+                                config_path = str(bundle.path)
+                            if bundle.spec.name == "boltz_sequences" and bundle.path:
+                                fasta_path = str(bundle.path)
+                        if config_path:
+                            job_info["config_path"] = config_path
+                        if fasta_path:
+                            job_info["fasta_path"] = fasta_path
+                        job_info["command"] = invocation.job.command
+                        job_info["working_dir"] = (
+                            str(invocation.job.working_dir)
+                            if invocation.job.working_dir
+                            else None
+                        )
+                    jobs_summary.append(job_info)
+
+                return self.format_success(
+                    {
+                        "count": len(serialized),
+                        "invocations": serialized,
+                        "jobs": jobs_summary,
+                    },
+                    message="Boltz mutation jobs prepared",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+        self.register_tool_metadata(
+            function=model_prepare_boltz_mutations,
+            name="model_prepare_boltz_mutations",
+            description="Prepare Boltz configuration YAML/FASTA bundles for explicit mutation payloads.",
+            parameters=[
+                {"name": "dataset_name", "type": "str"},
+                {"name": "mutation_entries", "type": "list[dict]"},
+                {"name": "model_name", "type": "str", "default": "boltz2"},
+                {"name": "base_config", "type": "dict", "optional": True},
+            ],
+            tags=["model", "boltz", "mutations"],
+        )

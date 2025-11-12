@@ -56,7 +56,7 @@ workflows:
       3. Compare the chains against a chosen reference (pairwise and MMseqs) to highlight GPCR-like examples.
       4. Examine conservation/linkage metrics for the curated chains and optionally spin out focused mutant libraries.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_dataset_stats
       - structure_register_chain_sequences_from_dataset
       - structure_list_dataset_sequences
@@ -76,7 +76,7 @@ workflows:
       3. Score each chain against the GPCR reference and separate high- from low-similarity candidates.
       4. Attach the resulting classifications to the structure metadata for downstream querying.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_register_chain_sequences_from_dataset
       - structure_list_dataset_sequences
       - load_sequence_entity
@@ -89,7 +89,7 @@ workflows:
       2. Align the remaining structures to the chosen reference, capturing transforms, RMSD summaries, and aligned copies.
       3. Export the aligned structures so the updated coordinates can replace or supplement the originals.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_dataset_stats
       - load_structure_dataset
       - structure_align_to_reference
@@ -103,7 +103,7 @@ workflows:
       3. Save the curated chains as a sequence dataset, annotate it with the GPCR GRN reference, and persist the table.
       4. Apply the GRN annotations back onto the source structures so residue-level numbering is accessible in future steps.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_register_chain_sequences_from_dataset
       - structure_collect_chain_sequences
       - align_sequences_by_id
@@ -132,7 +132,7 @@ workflows:
       3. Compare the embeddings to summarise similarity across structures using `structure_compute_embedding_similarity` (returns per-structure stats, optional raw rows, and plot-friendly coordinates).
       4. Persist the similarity property table (if requested) and aligned coordinates required downstream.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_dataset_stats
       - structure_register_chain_sequences_from_dataset
       - structure_collect_chain_sequences
@@ -162,7 +162,7 @@ workflows:
       2. Generate atom-level graphs for the dataset, storing the resulting graph dataset/entity references.
       3. Load individual graphs to verify node/edge counts or to feed downstream tooling.
     tools:
-      - structure_download_batch
+      - download_entities
       - structure_create_dataset
       - structure_graph_generate_from_dataset
       - structure_graph_load_entity
@@ -237,7 +237,7 @@ workflows:
       4. Record any generated properties or metadata so the results remain accessible for later review.
     tools:
       - sequence_save_sequences
-      - structure_download_batch
+      - download_entities
       - structure_collect_chain_sequences
       - sequence_annotate_with_grn
       - embedding_generate
