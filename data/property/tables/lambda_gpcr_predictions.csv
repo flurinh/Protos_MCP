@@ -1,0 +1,4 @@
+property_entry_id,entity_name,scope,protein_family,prediction_run_id,Lmax_11_cis_pred_007061,lmax_uv_pred_007061,lmax_11_cis_pred_007061,Lmax_at_pred_007061
+,A2AR_HUMAN,"[{""format"": ""sequence"", ""name"": ""A2AR_HUMAN""}]",gpcr_a,007061,461.51,376.25,464.58,448.84
+,ADRB2_HUMAN,"[{""format"": ""sequence"", ""name"": ""ADRB2_HUMAN""}]",gpcr_a,007061,512.23,374.84,515.28,511.33
+,DRD2_SHORT,"[{""format"": ""sequence"", ""name"": ""DRD2_SHORT""}]",gpcr_a,007061,463.18,387.74,451.62,433.69

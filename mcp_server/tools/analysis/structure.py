@@ -14,12 +14,16 @@ import pandas as pd
 import numpy as np
 
 from ..base import BaseTool
+from ...core.context_preview import PreviewLimits, build_dataframe_preview
 from ...core.exceptions import InvalidInputError, EntityNotFoundError
 from protos.analysis.structure_water_networks import summarize_water_networks
 from protos.analysis.structure_embedding_similarity import (
     ChainSelection,
     compute_structure_embedding_similarity,
 )
+
+
+STRUCTURE_PREVIEW_LIMITS = PreviewLimits()
 
 
 class StructureAnalysisTools(BaseTool):
@@ -191,10 +195,13 @@ class StructureAnalysisTools(BaseTool):
                 }
 
                 if include_atoms:
-                    preview = reset.head(max_atoms)
-                    payload["preview_rows"] = preview.to_dict(orient="records")
-                    payload["preview_count"] = len(preview)
-                    payload["truncated"] = atom_count > len(preview)
+                    safe_limit = max(25, min(max_atoms, STRUCTURE_PREVIEW_LIMITS.max_rows))
+                    preview_model = build_dataframe_preview(
+                        reset,
+                        limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=safe_limit),
+                        label=structure_id,
+                    )
+                    payload["atom_preview"] = preview_model.export()
 
                 return self.format_success(payload)
             except Exception as exc:  # noqa: BLE001
@@ -441,12 +448,16 @@ class StructureAnalysisTools(BaseTool):
                         dataset_entities.append(structure_id)
 
                     preview_records: List[Dict[str, Any]] = []
+                    preview_summary: Optional[Dict[str, Any]] = None
                     if return_preview:
-                        preview_records = (
-                            preview_frame.head(preview_limit)
-                            .reset_index()
-                            .to_dict(orient="records")
+                        safe_limit = max(25, min(preview_limit, STRUCTURE_PREVIEW_LIMITS.max_rows))
+                        preview_model = build_dataframe_preview(
+                            preview_frame,
+                            limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=safe_limit),
+                            label=f"{structure_id}_filter_preview",
                         )
+                        preview_summary = preview_model.export()
+                        preview_records = preview_summary.get("preview", [])
 
                     results.append(
                         {
@@ -455,6 +466,7 @@ class StructureAnalysisTools(BaseTool):
                             "filtered_rows": filtered_rows,
                             "saved_entity": saved_entity,
                             "preview": preview_records,
+                            "preview_summary": preview_summary,
                         }
                     )
 

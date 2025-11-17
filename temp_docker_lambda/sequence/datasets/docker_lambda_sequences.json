@@ -1,0 +1,16 @@
+{
+  "name": "docker_lambda_sequences",
+  "processor_type": "sequence",
+  "entities": [],
+  "entity_ids": [],
+  "metadata": {
+    "artifact_path": "sequence\\fasta\\datasets\\docker_lambda_sequences.fasta",
+    "sequence_count": 1,
+    "materialized": false,
+    "sequence_ids": [
+      "RHO"
+    ]
+  },
+  "created": "2025-11-13T17:32:33.512130",
+  "modified": "2025-11-13T17:32:33.512130"
+}

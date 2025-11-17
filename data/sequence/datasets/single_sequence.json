@@ -1,0 +1,16 @@
+{
+  "name": "single_sequence",
+  "processor_type": "sequence",
+  "entities": [
+    "SINGLE_SEQ"
+  ],
+  "entity_ids": [
+    "742802b0-fa97-4b78-be9d-3927f38fcbf7"
+  ],
+  "metadata": {
+    "source": "tools_sequence_workflow",
+    "size": 1
+  },
+  "created": "2025-11-12T16:12:24.342820",
+  "modified": "2025-11-12T16:12:24.342827"
+}

@@ -5,14 +5,14 @@
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence/fasta/entities/ADRB2_HUMAN.fasta",
+          "file_path": "sequence\\fasta\\entities\\ADRB2_HUMAN.fasta",
           "metadata": {
-            "file_path": "sequence/fasta/entities/ADRB2_HUMAN.fasta",
+            "file_path": "sequence\\fasta\\entities\\ADRB2_HUMAN.fasta",
             "length": 413,
             "sequence_id": "ADRB2_HUMAN",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T14:18:19.371161"
+          "created": "2025-11-13T13:29:10.060858"
         }
       },
       "relationships": [
@@ -29,24 +29,34 @@
             "status": "ok"
           },
           "created": "2025-11-12T14:18:32.154858"
+        },
+        {
+          "type": "annotated_by",
+          "source": "245df9f2-fbce-4a68-a219-2e5878897855",
+          "target": "a7dd6fae-1133-45e4-9df5-9aa71b1e5988",
+          "metadata": {
+            "table": "lambda_gpcr_predictions",
+            "scope_format": "sequence"
+          },
+          "created": "2025-11-13T13:31:04.345559"
         }
       ],
       "created": "2025-11-12T14:16:57.865879",
-      "modified": "2025-11-12T14:18:32.154865"
+      "modified": "2025-11-13T13:31:04.345559"
     },
     "88abce2d-695a-46dc-b39a-c4a5f8524ad5": {
       "original_id": "A2AR_HUMAN",
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence/fasta/entities/A2AR_HUMAN.fasta",
+          "file_path": "sequence\\fasta\\entities\\A2AR_HUMAN.fasta",
           "metadata": {
-            "file_path": "sequence/fasta/entities/A2AR_HUMAN.fasta",
+            "file_path": "sequence\\fasta\\entities\\A2AR_HUMAN.fasta",
             "length": 350,
             "sequence_id": "A2AR_HUMAN",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T14:18:19.405468"
+          "created": "2025-11-13T13:29:10.070373"
         }
       },
       "relationships": [
@@ -63,10 +73,20 @@
             "status": "ok"
           },
           "created": "2025-11-12T14:18:32.162896"
+        },
+        {
+          "type": "annotated_by",
+          "source": "245df9f2-fbce-4a68-a219-2e5878897855",
+          "target": "88abce2d-695a-46dc-b39a-c4a5f8524ad5",
+          "metadata": {
+            "table": "lambda_gpcr_predictions",
+            "scope_format": "sequence"
+          },
+          "created": "2025-11-13T13:31:04.355326"
         }
       ],
       "created": "2025-11-12T14:16:57.900922",
-      "modified": "2025-11-12T14:18:32.162904"
+      "modified": "2025-11-13T13:31:04.355326"
     },
     "30f42180-54e1-43b6-818c-6ffa77470c84": {
       "original_id": "3sn6",
@@ -1040,14 +1060,14 @@
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence/fasta/entities/DRD2_SHORT.fasta",
+          "file_path": "sequence\\fasta\\entities\\DRD2_SHORT.fasta",
           "metadata": {
-            "file_path": "sequence/fasta/entities/DRD2_SHORT.fasta",
+            "file_path": "sequence\\fasta\\entities\\DRD2_SHORT.fasta",
             "length": 443,
             "sequence_id": "DRD2_SHORT",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T14:18:19.437888"
+          "created": "2025-11-13T13:29:10.078884"
         }
       },
       "relationships": [
@@ -1064,19 +1084,29 @@
             "status": "ok"
           },
           "created": "2025-11-12T14:18:32.170696"
+        },
+        {
+          "type": "annotated_by",
+          "source": "245df9f2-fbce-4a68-a219-2e5878897855",
+          "target": "f1981142-6c01-4dd2-b505-e676fcb8ecce",
+          "metadata": {
+            "table": "lambda_gpcr_predictions",
+            "scope_format": "sequence"
+          },
+          "created": "2025-11-13T13:31:04.340945"
         }
       ],
       "created": "2025-11-12T14:18:19.269579",
-      "modified": "2025-11-12T14:18:32.170702"
+      "modified": "2025-11-13T13:31:04.340945"
     },
     "5daa3d76-f249-40ee-ada2-ef11aee92b56": {
       "original_id": "lambda_gpcr_sequences__grn",
       "aliases": [],
       "formats": {
         "grn": {
-          "file_path": "grn/tables/lambda_gpcr_sequences__grn.csv",
+          "file_path": "grn\\tables\\lambda_gpcr_sequences__grn.csv",
           "metadata": {
-            "artifact_path": "grn/tables/lambda_gpcr_sequences__grn.csv",
+            "artifact_path": "grn\\tables\\lambda_gpcr_sequences__grn.csv",
             "grn_columns": [
               "n.111",
               "n.110",
@@ -1662,12 +1692,88 @@
             "sequence_dataset": "lambda_gpcr_sequences",
             "table": "lambda_gpcr_sequences__grn"
           },
-          "created": "2025-11-12T14:18:32.136051"
+          "created": "2025-11-13T13:29:24.224752"
         }
       },
       "relationships": [],
       "created": "2025-11-12T14:18:32.136041",
-      "modified": "2025-11-12T14:18:32.136053"
+      "modified": "2025-11-13T13:29:24.224752"
+    },
+    "742802b0-fa97-4b78-be9d-3927f38fcbf7": {
+      "original_id": "SINGLE_SEQ",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/SINGLE_SEQ.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/SINGLE_SEQ.fasta",
+            "length": 12,
+            "sequence_id": "SINGLE_SEQ",
+            "type": "single_sequence"
+          },
+          "created": "2025-11-12T16:12:24.332724"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-12T16:12:24.332707",
+      "modified": "2025-11-12T16:12:24.332726"
+    },
+    "9eee7ae1-3f94-4c26-9910-8af58c49ab2b": {
+      "original_id": "SEQ_ALPHA",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/SEQ_ALPHA.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/SEQ_ALPHA.fasta",
+            "length": 24,
+            "sequence_id": "SEQ_ALPHA",
+            "type": "single_sequence"
+          },
+          "created": "2025-11-12T16:12:24.365314"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-12T16:12:24.365303",
+      "modified": "2025-11-12T16:12:24.365316"
+    },
+    "8ecca6ec-ff2d-4891-99d6-465a52e85b9c": {
+      "original_id": "SEQ_BETA",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/SEQ_BETA.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/SEQ_BETA.fasta",
+            "length": 37,
+            "sequence_id": "SEQ_BETA",
+            "type": "single_sequence"
+          },
+          "created": "2025-11-12T16:12:24.392012"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-12T16:12:24.391998",
+      "modified": "2025-11-12T16:12:24.392013"
+    },
+    "245df9f2-fbce-4a68-a219-2e5878897855": {
+      "original_id": "lambda_gpcr_predictions",
+      "aliases": [],
+      "formats": {
+        "property": {
+          "file_path": "property\\tables\\lambda_gpcr_predictions.csv",
+          "metadata": {
+            "table": "lambda_gpcr_predictions",
+            "artifact_path": "property\\tables\\lambda_gpcr_predictions.csv",
+            "materialize_entries": false,
+            "index_artifact": "property\\datasets\\lambda_gpcr_predictions__index.json"
+          },
+          "created": "2025-11-13T13:31:04.325257"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-13T13:31:04.325257",
+      "modified": "2025-11-13T13:31:04.325257"
     }
   },
   "name_index": {
@@ -1697,6 +1803,10 @@
     "6b73_chain_B_esm2_t12_35m_per_residue_embedding_chain_sequences_esm2_t12_35m_per_residue": "8cd40f00-e63e-4ab7-8eb9-f585e9fb2957",
     "gpcr_structure_embedding_similarity": "70865339-06be-416b-a75b-a02d2d90b5de",
     "DRD2_SHORT": "f1981142-6c01-4dd2-b505-e676fcb8ecce",
-    "lambda_gpcr_sequences__grn": "5daa3d76-f249-40ee-ada2-ef11aee92b56"
+    "lambda_gpcr_sequences__grn": "5daa3d76-f249-40ee-ada2-ef11aee92b56",
+    "SINGLE_SEQ": "742802b0-fa97-4b78-be9d-3927f38fcbf7",
+    "SEQ_ALPHA": "9eee7ae1-3f94-4c26-9910-8af58c49ab2b",
+    "SEQ_BETA": "8ecca6ec-ff2d-4891-99d6-465a52e85b9c",
+    "lambda_gpcr_predictions": "245df9f2-fbce-4a68-a219-2e5878897855"
   }
 }

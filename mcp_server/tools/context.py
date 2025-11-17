@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .base import BaseTool
+from ..core.context_preview import (
+    PreviewLimits,
+    build_generic_preview,
+)
+
+DEFAULT_PREVIEW_LIMITS = PreviewLimits()
 
 
 class ContextTools(BaseTool):
@@ -17,6 +23,7 @@ class ContextTools(BaseTool):
 
             snapshot = self.session.snapshot()
             return self.format_success(snapshot)
+
         self.register_tool_metadata(
             function=context_status,
             name="context_status",
@@ -53,6 +60,7 @@ class ContextTools(BaseTool):
             if tags:
                 payload["tags"] = tags
             return self.format_success(payload)
+
         self.register_tool_metadata(
             function=context_list,
             name="context_list",
@@ -94,6 +102,7 @@ class ContextTools(BaseTool):
                 payload["resolved"] = resolution
 
             return self.format_success(payload)
+
         self.register_tool_metadata(
             function=context_get,
             name="context_get",
@@ -107,7 +116,9 @@ class ContextTools(BaseTool):
         )
 
         @server.tool()
-        def context_set_active(ctx, handle: str, scope: Optional[str] = None) -> Dict[str, Any]:
+        def context_set_active(
+            ctx, handle: str, scope: Optional[str] = None
+        ) -> Dict[str, Any]:
             """Mark an artifact handle as active for a given scope."""
 
             key = scope or "default"
@@ -125,6 +136,7 @@ class ContextTools(BaseTool):
                 },
                 message="Handle activated",
             )
+
         self.register_tool_metadata(
             function=context_set_active,
             name="context_set_active",
@@ -149,7 +161,9 @@ class ContextTools(BaseTool):
 
             removed: List[str] = []
             if clear_all:
-                removed = [artifact.handle for artifact in self.session.iter_artifacts()]
+                removed = [
+                    artifact.handle for artifact in self.session.iter_artifacts()
+                ]
                 self.session.clear_all()
             elif handle:
                 if self.session.clear_artifact(handle):
@@ -171,6 +185,7 @@ class ContextTools(BaseTool):
                 },
                 message="Context cleared" if removed else "No matching artifacts",
             )
+
         self.register_tool_metadata(
             function=context_clear,
             name="context_clear",
@@ -190,6 +205,7 @@ class ContextTools(BaseTool):
 
             history = self.session.history(limit=limit)
             return self.format_success({"count": len(history), "events": history})
+
         self.register_tool_metadata(
             function=context_history,
             name="context_history",
@@ -211,6 +227,7 @@ class ContextTools(BaseTool):
                 },
                 message="Session context reset",
             )
+
         self.register_tool_metadata(
             function=context_reset,
             name="context_reset",
@@ -222,8 +239,8 @@ class ContextTools(BaseTool):
 
     def _resolve_artifact(
         self,
-        artifact,
         *,
+        artifact,
         preview_length: int,
         max_items: int,
     ) -> Dict[str, Any]:
@@ -231,6 +248,11 @@ class ContextTools(BaseTool):
 
         payload: Dict[str, Any] = {"kind": artifact.kind}
         processor_type = artifact.processor_type
+        limits = DEFAULT_PREVIEW_LIMITS.override(
+            max_rows=max_items,
+            max_items=max_items,
+            max_chars=preview_length,
+        )
 
         if artifact.kind == "dataset" and processor_type:
             processor = self.get_processor(processor_type)
@@ -238,61 +260,29 @@ class ContextTools(BaseTool):
             if manager and manager.dataset_exists(artifact.name):
                 info = manager.get_dataset_info(artifact.name)
                 entities = manager.get_dataset_entities(artifact.name)
+                limited = entities[: limits.max_items]
                 payload.update(
                     {
                         "dataset_info": info,
-                        "entities": entities[:max_items],
+                        "entities": limited,
                         "entity_count": len(entities),
-                        "truncated": len(entities) > max_items,
+                        "truncated": len(entities) > len(limited),
                     }
                 )
         elif artifact.kind == "entity" and processor_type:
             processor = self.get_processor(processor_type)
             if hasattr(processor, "load_entity"):
                 entity = processor.load_entity(artifact.name)
-                payload.update(self._summarize_entity(entity, preview_length=preview_length))
+                preview = build_generic_preview(
+                    entity,
+                    limits=limits,
+                    label=artifact.name,
+                )
+                payload.update(preview.export())
         elif artifact.kind == "result":
             payload.update({"summary": artifact.summary})
 
         return payload
-
-    def _summarize_entity(self, entity, *, preview_length: int) -> Dict[str, Any]:
-        """Create a lightweight summary for an entity payload."""
-
-        if entity is None:
-            return {"entity": None}
-
-        if isinstance(entity, str):
-            return {
-                "entity_type": "sequence",
-                "length": len(entity),
-                "preview": entity[:preview_length],
-            }
-        if isinstance(entity, dict):
-            sample = list(entity.items())[:10]
-            preview = [
-                {
-                    "key": key,
-                    "length": len(value) if isinstance(value, str) else None,
-                    "preview": value[:preview_length] if isinstance(value, str) else None,
-                }
-                for key, value in sample
-            ]
-            return {
-                "entity_type": "mapping",
-                "size": len(entity),
-                "preview": preview,
-                "truncated": len(entity) > len(sample),
-            }
-        if hasattr(entity, "shape"):
-            rows = getattr(entity, "shape", [None])[0]
-            cols = getattr(entity, "columns", None)
-            return {
-                "entity_type": "table",
-                "rows": rows,
-                "columns": list(cols)[:20] if cols is not None else None,
-            }
-        return {"entity": str(entity)}
 
 
 __all__ = ["ContextTools"]
