@@ -12,7 +12,7 @@
     "f1981142-6c01-4dd2-b505-e676fcb8ecce"
   ],
   "metadata": {
-    "artifact_path": "sequence\\fasta\\datasets\\lambda_gpcr_sequences.fasta",
+    "artifact_path": "sequence/fasta/datasets/lambda_gpcr_sequences.fasta",
     "sequence_count": 3,
     "materialized": true,
     "sequence_ids": [
@@ -23,6 +23,6 @@
     "source": "model_lambda_via_tools",
     "protein_family": "gpcr_a"
   },
-  "created": "2025-11-13T13:29:10.086892",
-  "modified": "2025-11-13T13:29:10.086892"
+  "created": "2025-11-24T16:30:13.976398",
+  "modified": "2025-11-24T16:30:13.976411"
 }

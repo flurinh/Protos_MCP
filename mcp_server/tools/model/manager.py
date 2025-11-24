@@ -144,6 +144,28 @@ class ModelManagerTools(BaseTool):
 
         return payload
 
+    @staticmethod
+    def _summarize_job(job: PreparedJob) -> Dict[str, Any]:
+        artifacts: List[Dict[str, Any]] = []
+        for bundle in job.artifacts:
+            artifacts.append(
+                {
+                    "name": bundle.spec.name,
+                    "kind": bundle.spec.kind,
+                    "provider": bundle.spec.provider,
+                    "format": bundle.spec.format,
+                    "path": str(bundle.path) if bundle.path else None,
+                    "metadata": bundle.metadata,
+                }
+            )
+
+        return {
+            "command": list(job.command),
+            "working_dir": str(job.working_dir) if job.working_dir else None,
+            "artifacts": artifacts,
+            "metadata": dict(job.metadata or {}),
+        }
+
     def _invocation_from_payload(self, payload: Dict[str, Any]) -> ModelInvocation:
         if not payload:
             raise InvalidInputError(
@@ -499,13 +521,21 @@ class ModelManagerTools(BaseTool):
         )
 
         runtime = invocation.runtime
-        if runtime is None:
-            raise RuntimeError("Lambda invocation did not return runtime results")
+        job = invocation.job
 
-        predictions = runtime.outputs.get("predictions") if runtime.outputs else None
-        attention = runtime.outputs.get("attention") if runtime.outputs else None
+        if runtime is None and job is None:
+            raise RuntimeError("Lambda invocation did not return runtime or job metadata")
+
+        predictions = (
+            runtime.outputs.get("predictions") if runtime and runtime.outputs else None
+        )
+        attention = (
+            runtime.outputs.get("attention") if runtime and runtime.outputs else None
+        )
         property_table_name = (
-            runtime.metadata.get("property_table") if runtime.metadata else None
+            runtime.metadata.get("property_table")
+            if runtime and runtime.metadata
+            else None
         )
 
         row_count = 0
@@ -527,34 +557,57 @@ class ModelManagerTools(BaseTool):
         if property_table_name:
             property_path = prop_proc.tables_dir / f"{property_table_name}.csv"
 
+        if runtime is not None:
+            return {
+                "mode": "runtime",
+                "run_id": runtime.metadata.get("run_id") if runtime.metadata else None,
+                "protein_family": (
+                    runtime.metadata.get("protein_family")
+                    if runtime.metadata
+                    else protein_family
+                ),
+                "prediction_row_count": row_count,
+                "prediction_columns": columns,
+                "predictions_preview": preview_rows,
+                "attention_available": attention_available,
+                "property_table": property_table_name,
+                "property_table_path": str(property_path) if property_path else None,
+                "work_dir": runtime.metadata.get("work_dir") if runtime.metadata else None,
+                "outputs_dir": (
+                    runtime.metadata.get("outputs_dir") if runtime.metadata else None
+                ),
+                "embedding_dataset": (
+                    runtime.metadata.get("embedding_dataset")
+                    if runtime.metadata
+                    else None
+                ),
+                "embedding_model": (
+                    runtime.metadata.get("embedding_model")
+                    if runtime.metadata
+                    else embedding_model
+                ),
+                "embedding_type": (
+                    runtime.metadata.get("embedding_type")
+                    if runtime.metadata
+                    else embedding_type
+                ),
+            }
+
+        job_summary = self._summarize_job(job) if job else None
         return {
-            "run_id": runtime.metadata.get("run_id") if runtime.metadata else None,
-            "protein_family": (
-                runtime.metadata.get("protein_family")
-                if runtime.metadata
-                else protein_family
-            ),
-            "prediction_row_count": row_count,
-            "prediction_columns": columns,
-            "predictions_preview": preview_rows,
-            "attention_available": attention_available,
-            "property_table": property_table_name,
-            "property_table_path": str(property_path) if property_path else None,
-            "work_dir": runtime.metadata.get("work_dir") if runtime.metadata else None,
-            "outputs_dir": (
-                runtime.metadata.get("outputs_dir") if runtime.metadata else None
-            ),
+            "mode": "job",
+            "job": job_summary,
             "embedding_dataset": (
-                runtime.metadata.get("embedding_dataset") if runtime.metadata else None
+                invocation.metadata.get("embedding_dataset") if invocation.metadata else None
             ),
             "embedding_model": (
-                runtime.metadata.get("embedding_model")
-                if runtime.metadata
+                invocation.metadata.get("embedding_model")
+                if invocation.metadata
                 else embedding_model
             ),
             "embedding_type": (
-                runtime.metadata.get("embedding_type")
-                if runtime.metadata
+                invocation.metadata.get("embedding_type")
+                if invocation.metadata
                 else embedding_type
             ),
         }

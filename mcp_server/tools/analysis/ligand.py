@@ -15,6 +15,8 @@ import pandas as pd
 from ..base import BaseTool
 from ...core.exceptions import InvalidInputError, EntityNotFoundError
 
+from protos.io.ingest.ligand_loader import LigandLoader
+
 logger = logging.getLogger(__name__)
 
 
@@ -426,6 +428,60 @@ class LigandAnalysisTools(BaseTool):
                     "truncated": len(entity_names) > 25,
                 },
                 message="Ligand dataset registered",
+            )
+
+        @server.tool()
+        def ligand_import_smiles_structures(
+            ctx,
+            smiles_map: Dict[str, str],
+            dataset_name: Optional[str] = None,
+            chain_id: str = "L",
+            generate_3d: bool = True,
+        ) -> Dict:
+            """Create structure entities from SMILES strings via LigandLoader."""
+
+            if error := self.validate_required_params(
+                {"smiles_map": smiles_map}, ["smiles_map"],
+            ):
+                return error
+
+            if not smiles_map:
+                return self.format_error(
+                    "No SMILES provided",
+                    "Supply one or more identifier → SMILES mappings to import.",
+                )
+
+            structure_proc = self.get_processor("structure")
+            molecule_proc = self.get_processor("molecule")
+            loader = LigandLoader(
+                structure_processor=structure_proc,
+                ligand_processor=molecule_proc,
+            )
+
+            try:
+                dataset_id, entities = loader.import_smiles(
+                    smiles_map,
+                    dataset_name=dataset_name,
+                    chain_id=chain_id,
+                    generate_3d=generate_3d,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self.handle_error(exc)
+
+            molecule_ds = f"{dataset_id}_molecules"
+            structure_info = structure_proc.dataset_manager.get_dataset_info(dataset_id)
+            molecule_info = molecule_proc.dataset_manager.get_dataset_info(molecule_ds)
+
+            return self.format_success(
+                {
+                    "dataset_name": dataset_id,
+                    "structure_entities": entities,
+                    "structure_entity_count": len(entities),
+                    "structure_metadata": structure_info.get("metadata", {}),
+                    "molecule_dataset": molecule_ds,
+                    "molecule_metadata": molecule_info.get("metadata", {}),
+                },
+                message="SMILES imported as structure entities",
             )
         
         @server.tool()

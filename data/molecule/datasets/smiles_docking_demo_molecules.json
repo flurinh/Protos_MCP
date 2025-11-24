@@ -1,0 +1,20 @@
+{
+  "name": "smiles_docking_demo_molecules",
+  "processor_type": "molecule",
+  "entities": [
+    "DOPAMINE_1",
+    "SEROTONIN_2",
+    "HISTAMINE_3"
+  ],
+  "entity_ids": [
+    "f852767d-7b8b-4648-afb6-8df8c9b1db52",
+    "c20fe6ea-af50-4756-9ed2-5373592f531c",
+    "5fa64873-5b61-41a2-bb3d-c8496b4d217c"
+  ],
+  "metadata": {
+    "entity_count": 3,
+    "kind": "smiles"
+  },
+  "created": "2025-11-24T16:35:44.874989",
+  "modified": "2025-11-24T16:35:44.875005"
+}

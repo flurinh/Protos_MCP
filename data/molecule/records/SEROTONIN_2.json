@@ -1,0 +1,6 @@
+{
+  "smiles": "C1=CC(=C(C=C1CCN)O)OCC2=NOC(=N2)N",
+  "input_name": "SEROTONIN_2",
+  "kind": "smiles_record",
+  "name": "SEROTONIN_2"
+}

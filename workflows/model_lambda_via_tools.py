@@ -133,15 +133,17 @@ async def run_workflow() -> Dict[str, Any]:
         )
 
         lambda_payload = run_prediction.get("data", run_prediction)
-        property_table_name = (
-            lambda_payload.get("lambda_run", {}).get("property_table")
-            or PROPERTY_TABLE
-        )
-        property_rows = await call(
-            "load_property_rows",
-            dataset_name=property_table_name,
-            limit=10,
-        )
+        lambda_info = lambda_payload.get("lambda_run", lambda_payload)
+        property_preview = None
+        if lambda_info.get("mode") == "runtime":
+            property_table_name = (
+                lambda_info.get("property_table") or PROPERTY_TABLE
+            )
+            property_preview = await call(
+                "load_property_rows",
+                dataset_name=property_table_name,
+                limit=10,
+            )
 
         return {
             "data_root": data_root,
@@ -149,7 +151,7 @@ async def run_workflow() -> Dict[str, Any]:
             "sequence_entities": sequence_entities,
             "lambda_resources": resources,
             "lambda_run": run_prediction,
-            "property_preview": property_rows,
+            "property_preview": property_preview,
         }
 
 
@@ -177,19 +179,38 @@ def summarize(result: Dict[str, Any]) -> None:
             for name, seq in preview.items():
                 print(f"    {name}: {seq}")
         lambda_info = run_data.get("lambda_run", run_data)
-        print("Lambda run metadata:")
-        print("  run_id:", lambda_info.get("run_id"))
-        print("  property_table:", lambda_info.get("property_table"))
-        print("  row_count:", lambda_info.get("prediction_row_count"))
-        if lambda_info.get("property_table_path"):
-            print("  property_table_path:", lambda_info.get("property_table_path"))
+        print("Lambda submission:")
+        mode = lambda_info.get("mode", "runtime")
+        print("  mode:", mode)
+        if mode == "runtime":
+            print("  run_id:", lambda_info.get("run_id"))
+            print("  property_table:", lambda_info.get("property_table"))
+            print("  row_count:", lambda_info.get("prediction_row_count"))
+            if lambda_info.get("property_table_path"):
+                print("  property_table_path:", lambda_info.get("property_table_path"))
+        else:
+            job = lambda_info.get("job", {})
+            print("  command:", " ".join(job.get("command", [])))
+            print("  working_dir:", job.get("working_dir"))
+            artifacts = job.get("artifacts", [])
+            if artifacts:
+                print("  artifacts:")
+                for art in artifacts:
+                    print(
+                        "    -",
+                        art.get("name"),
+                        art.get("kind"),
+                        art.get("path"),
+                    )
 
-    preview = result.get("property_preview", {}).get("data", {})
-    if preview:
-        rows = preview.get("data") or []
-        print("Prediction preview (first rows):")
-        for row in rows:
-            print("  ", row)
+    preview = result.get("property_preview", {}) or {}
+    table_preview = preview.get("data", {}) if isinstance(preview, dict) else {}
+    if table_preview:
+        rows = table_preview.get("data") or []
+        if rows:
+            print("Prediction preview (first rows):")
+            for row in rows:
+                print("  ", row)
 
 
 def main() -> None:

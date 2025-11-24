@@ -1,0 +1,5 @@
+Detailed scientific question for the agonist vs inverse agonist study:
+
+"When the Schiff base in opsins toggles between protonated and deprotonated states it forms or breaks a stabilizing hydrogen bond. Across class A GPCRs (β-adrenergic, dopamine, serotonin, muscarinic, adenosine, and opsin exemplars), how do the binding-pocket GRN positions surrounding the chromophore/ligand differ between agonist-bound and inverse-agonist-bound structures? Specifically, can we (1) annotate each receptor structure with GPCRdb GRN labels, (2) quantify residue-level contact patterns, hydrogen bonds, and hydrophobic packing per GRN position for both agonist and inverse agonist sets, and (3) determine whether there is a conserved shift in contacts around the Schiff-base linkage (TM3–TM7/H8 positions) that correlates with agonism vs inverse agonism?"
+
+The question should be answered by building matched datasets of the PDB IDs listed in `projects/valerie.py`, annotating them with GRN, and comparing per-position interaction statistics as described there.

@@ -5,14 +5,14 @@
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence\\fasta\\entities\\ADRB2_HUMAN.fasta",
+          "file_path": "sequence/fasta/entities/ADRB2_HUMAN.fasta",
           "metadata": {
-            "file_path": "sequence\\fasta\\entities\\ADRB2_HUMAN.fasta",
+            "file_path": "sequence/fasta/entities/ADRB2_HUMAN.fasta",
             "length": 413,
             "sequence_id": "ADRB2_HUMAN",
             "type": "single_sequence"
           },
-          "created": "2025-11-13T13:29:10.060858"
+          "created": "2025-11-24T16:30:13.873561"
         }
       },
       "relationships": [
@@ -42,21 +42,21 @@
         }
       ],
       "created": "2025-11-12T14:16:57.865879",
-      "modified": "2025-11-13T13:31:04.345559"
+      "modified": "2025-11-24T16:30:13.873581"
     },
     "88abce2d-695a-46dc-b39a-c4a5f8524ad5": {
       "original_id": "A2AR_HUMAN",
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence\\fasta\\entities\\A2AR_HUMAN.fasta",
+          "file_path": "sequence/fasta/entities/A2AR_HUMAN.fasta",
           "metadata": {
-            "file_path": "sequence\\fasta\\entities\\A2AR_HUMAN.fasta",
+            "file_path": "sequence/fasta/entities/A2AR_HUMAN.fasta",
             "length": 350,
             "sequence_id": "A2AR_HUMAN",
             "type": "single_sequence"
           },
-          "created": "2025-11-13T13:29:10.070373"
+          "created": "2025-11-24T16:30:13.911811"
         }
       },
       "relationships": [
@@ -86,7 +86,7 @@
         }
       ],
       "created": "2025-11-12T14:16:57.900922",
-      "modified": "2025-11-13T13:31:04.355326"
+      "modified": "2025-11-24T16:30:13.911833"
     },
     "30f42180-54e1-43b6-818c-6ffa77470c84": {
       "original_id": "3sn6",
@@ -1060,14 +1060,14 @@
       "aliases": [],
       "formats": {
         "sequence": {
-          "file_path": "sequence\\fasta\\entities\\DRD2_SHORT.fasta",
+          "file_path": "sequence/fasta/entities/DRD2_SHORT.fasta",
           "metadata": {
-            "file_path": "sequence\\fasta\\entities\\DRD2_SHORT.fasta",
+            "file_path": "sequence/fasta/entities/DRD2_SHORT.fasta",
             "length": 443,
             "sequence_id": "DRD2_SHORT",
             "type": "single_sequence"
           },
-          "created": "2025-11-13T13:29:10.078884"
+          "created": "2025-11-24T16:30:13.951156"
         }
       },
       "relationships": [
@@ -1097,16 +1097,16 @@
         }
       ],
       "created": "2025-11-12T14:18:19.269579",
-      "modified": "2025-11-13T13:31:04.340945"
+      "modified": "2025-11-24T16:30:13.951172"
     },
     "5daa3d76-f249-40ee-ada2-ef11aee92b56": {
       "original_id": "lambda_gpcr_sequences__grn",
       "aliases": [],
       "formats": {
         "grn": {
-          "file_path": "grn\\tables\\lambda_gpcr_sequences__grn.csv",
+          "file_path": "grn/tables/lambda_gpcr_sequences__grn.csv",
           "metadata": {
-            "artifact_path": "grn\\tables\\lambda_gpcr_sequences__grn.csv",
+            "artifact_path": "grn/tables/lambda_gpcr_sequences__grn.csv",
             "grn_columns": [
               "n.111",
               "n.110",
@@ -1692,12 +1692,12 @@
             "sequence_dataset": "lambda_gpcr_sequences",
             "table": "lambda_gpcr_sequences__grn"
           },
-          "created": "2025-11-13T13:29:24.224752"
+          "created": "2025-11-24T16:30:28.375690"
         }
       },
       "relationships": [],
       "created": "2025-11-12T14:18:32.136041",
-      "modified": "2025-11-13T13:29:24.224752"
+      "modified": "2025-11-24T16:30:28.375716"
     },
     "742802b0-fa97-4b78-be9d-3927f38fcbf7": {
       "original_id": "SINGLE_SEQ",
@@ -1711,12 +1711,12 @@
             "sequence_id": "SINGLE_SEQ",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T16:12:24.332724"
+          "created": "2025-11-20T13:23:40.448877"
         }
       },
       "relationships": [],
       "created": "2025-11-12T16:12:24.332707",
-      "modified": "2025-11-12T16:12:24.332726"
+      "modified": "2025-11-20T13:23:40.448893"
     },
     "9eee7ae1-3f94-4c26-9910-8af58c49ab2b": {
       "original_id": "SEQ_ALPHA",
@@ -1730,12 +1730,12 @@
             "sequence_id": "SEQ_ALPHA",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T16:12:24.365314"
+          "created": "2025-11-20T13:23:40.496188"
         }
       },
       "relationships": [],
       "created": "2025-11-12T16:12:24.365303",
-      "modified": "2025-11-12T16:12:24.365316"
+      "modified": "2025-11-20T13:23:40.496209"
     },
     "8ecca6ec-ff2d-4891-99d6-465a52e85b9c": {
       "original_id": "SEQ_BETA",
@@ -1749,12 +1749,12 @@
             "sequence_id": "SEQ_BETA",
             "type": "single_sequence"
           },
-          "created": "2025-11-12T16:12:24.392012"
+          "created": "2025-11-20T13:23:40.532635"
         }
       },
       "relationships": [],
       "created": "2025-11-12T16:12:24.391998",
-      "modified": "2025-11-12T16:12:24.392013"
+      "modified": "2025-11-20T13:23:40.532652"
     },
     "245df9f2-fbce-4a68-a219-2e5878897855": {
       "original_id": "lambda_gpcr_predictions",
@@ -1774,6 +1774,1048 @@
       "relationships": [],
       "created": "2025-11-13T13:31:04.325257",
       "modified": "2025-11-13T13:31:04.325257"
+    },
+    "4e7b2b80-9178-4642-883e-0b283699b3d9": {
+      "original_id": "1U19",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/1U19.pkl",
+          "metadata": {
+            "content_hash": "8b51e59a794e27c73abf4557d8b73e12b28422023b932d6d76c3dc349f07ee41",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-20T12:46:23.460683",
+            "atom_count": 5948,
+            "source": "local",
+            "resource": "1u19.cif",
+            "source_id": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/temp_cif/1u19.cif",
+            "download_date": "2025-11-20T13:46:23.124889",
+            "loader": "StructureLoader",
+            "id": "1u19",
+            "type": "local_file",
+            "original_id": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/temp_cif/1u19.cif",
+            "filename": "1u19.cif",
+            "source_file": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/mmcif/imported/1u19.cif"
+          },
+          "created": "2025-11-20T13:46:23.460803"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-20T13:46:23.128002",
+      "modified": "2025-11-20T13:46:23.460809"
+    },
+    "29a20f7c-a8d6-432d-a571-d9c226ec1523": {
+      "original_id": "1F88",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/1F88.pkl",
+          "metadata": {
+            "content_hash": "eeda44112c75f6e8a666b49ff19007dc70de2af211faf7ca67ca12d7b21b9757",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-20T12:46:23.769707",
+            "atom_count": 5267,
+            "source": "local",
+            "resource": "1f88.cif",
+            "source_id": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/temp_cif/1f88.cif",
+            "download_date": "2025-11-20T13:46:23.519058",
+            "loader": "StructureLoader",
+            "id": "1f88",
+            "type": "local_file",
+            "original_id": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/temp_cif/1f88.cif",
+            "filename": "1f88.cif",
+            "source_file": "/mnt/c/Users/hidbe/PycharmProjects/Protos_MCP/data/structure/mmcif/imported/1f88.cif"
+          },
+          "created": "2025-11-20T13:46:23.769803"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-20T13:46:23.521931",
+      "modified": "2025-11-20T13:46:23.769808"
+    },
+    "aa4e9c75-0304-48b0-91b1-040aee43f829": {
+      "original_id": "1u19",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/1u19.pkl",
+          "metadata": {
+            "content_hash": "8b51e59a794e27c73abf4557d8b73e12b28422023b932d6d76c3dc349f07ee41",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-20T12:58:18.573990",
+            "atom_count": 5948
+          },
+          "created": "2025-11-20T13:58:18.574075"
+        }
+      },
+      "relationships": [
+        {
+          "type": "derived_from",
+          "source": "d8ac9f53-42f0-4663-a763-542971de677b",
+          "target": "aa4e9c75-0304-48b0-91b1-040aee43f829",
+          "metadata": {
+            "chain_id": "A",
+            "structure_id": "1u19",
+            "sequence_length": 351,
+            "residue_span": [
+              0,
+              2070
+            ],
+            "semantic_role": "chain_sequence"
+          },
+          "created": "2025-11-20T13:46:24.076958"
+        },
+        {
+          "type": "derived_from",
+          "source": "2d02063e-8238-47be-aad4-95c130f60453",
+          "target": "aa4e9c75-0304-48b0-91b1-040aee43f829",
+          "metadata": {
+            "chain_id": "B",
+            "structure_id": "1u19",
+            "sequence_length": 351,
+            "residue_span": [
+              0,
+              2069
+            ],
+            "semantic_role": "chain_sequence"
+          },
+          "created": "2025-11-20T13:46:24.086064"
+        }
+      ],
+      "created": "2025-11-20T13:46:23.870834",
+      "modified": "2025-11-20T13:58:18.574082"
+    },
+    "b2f30cc0-feb1-4341-ac89-2e865470e0df": {
+      "original_id": "1f88",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/1f88.pkl",
+          "metadata": {
+            "content_hash": "eeda44112c75f6e8a666b49ff19007dc70de2af211faf7ca67ca12d7b21b9757",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-20T12:58:18.980267",
+            "atom_count": 5267
+          },
+          "created": "2025-11-20T13:58:18.980334"
+        }
+      },
+      "relationships": [
+        {
+          "type": "derived_from",
+          "source": "0339ae0c-cd8b-453b-819f-17d8f037dbd2",
+          "target": "b2f30cc0-feb1-4341-ac89-2e865470e0df",
+          "metadata": {
+            "chain_id": "A",
+            "structure_id": "1f88",
+            "sequence_length": 338,
+            "residue_span": [
+              1,
+              977
+            ],
+            "semantic_role": "chain_sequence"
+          },
+          "created": "2025-11-20T13:46:24.160964"
+        },
+        {
+          "type": "derived_from",
+          "source": "8d167b4a-5d69-4a4a-82f9-37cd1f2d657b",
+          "target": "b2f30cc0-feb1-4341-ac89-2e865470e0df",
+          "metadata": {
+            "chain_id": "B",
+            "structure_id": "1f88",
+            "sequence_length": 305,
+            "residue_span": [
+              1,
+              978
+            ],
+            "semantic_role": "chain_sequence"
+          },
+          "created": "2025-11-20T13:46:24.169883"
+        }
+      ],
+      "created": "2025-11-20T13:46:23.927954",
+      "modified": "2025-11-20T13:58:18.980340"
+    },
+    "d8ac9f53-42f0-4663-a763-542971de677b": {
+      "original_id": "1u19_chain_A",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/1u19_chain_A.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/1u19_chain_A.fasta",
+            "length": 351,
+            "sequence_id": "1u19_chain_A",
+            "type": "single_sequence",
+            "structure_id": "1u19",
+            "chain_id": "A",
+            "sequence_length": 351,
+            "residue_span": [
+              0,
+              2070
+            ],
+            "semantic_role": "chain_sequence",
+            "source_processor": "structure"
+          },
+          "created": "2025-11-20T13:58:13.894907"
+        }
+      },
+      "relationships": [
+        {
+          "type": "annotated_by",
+          "source": "e86168be-3d4e-4897-a66a-91dbd00a97b6",
+          "target": "d8ac9f53-42f0-4663-a763-542971de677b",
+          "metadata": {
+            "table": "opsin_chain_grn",
+            "reference": "Rhodopsin-Human",
+            "normalized_score": 4.156552706552712,
+            "coverage": 0.9465408805031447,
+            "assigned_positions": 301,
+            "status": "ok"
+          },
+          "created": "2025-11-20T13:46:28.470256"
+        }
+      ],
+      "created": "2025-11-20T13:46:24.031237",
+      "modified": "2025-11-20T13:58:13.894918"
+    },
+    "2d02063e-8238-47be-aad4-95c130f60453": {
+      "original_id": "1u19_chain_B",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/1u19_chain_B.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/1u19_chain_B.fasta",
+            "length": 351,
+            "sequence_id": "1u19_chain_B",
+            "type": "single_sequence",
+            "structure_id": "1u19",
+            "chain_id": "B",
+            "sequence_length": 351,
+            "residue_span": [
+              0,
+              2069
+            ],
+            "semantic_role": "chain_sequence",
+            "source_processor": "structure"
+          },
+          "created": "2025-11-20T13:58:13.923714"
+        }
+      },
+      "relationships": [
+        {
+          "type": "annotated_by",
+          "source": "e86168be-3d4e-4897-a66a-91dbd00a97b6",
+          "target": "2d02063e-8238-47be-aad4-95c130f60453",
+          "metadata": {
+            "table": "opsin_chain_grn",
+            "reference": "Rhodopsin-Human",
+            "normalized_score": 4.156552706552712,
+            "coverage": 0.9465408805031447,
+            "assigned_positions": 301,
+            "status": "ok"
+          },
+          "created": "2025-11-20T13:46:28.481176"
+        }
+      ],
+      "created": "2025-11-20T13:46:24.059664",
+      "modified": "2025-11-20T13:58:13.923726"
+    },
+    "0339ae0c-cd8b-453b-819f-17d8f037dbd2": {
+      "original_id": "1f88_chain_A",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/1f88_chain_A.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/1f88_chain_A.fasta",
+            "length": 338,
+            "sequence_id": "1f88_chain_A",
+            "type": "single_sequence",
+            "structure_id": "1f88",
+            "chain_id": "A",
+            "sequence_length": 338,
+            "residue_span": [
+              1,
+              977
+            ],
+            "semantic_role": "chain_sequence",
+            "source_processor": "structure"
+          },
+          "created": "2025-11-20T13:58:13.955715"
+        }
+      },
+      "relationships": [
+        {
+          "type": "annotated_by",
+          "source": "e86168be-3d4e-4897-a66a-91dbd00a97b6",
+          "target": "0339ae0c-cd8b-453b-819f-17d8f037dbd2",
+          "metadata": {
+            "table": "opsin_chain_grn",
+            "reference": "Rhodopsin-Human",
+            "normalized_score": 4.185650887573971,
+            "coverage": 0.9245283018867925,
+            "assigned_positions": 294,
+            "status": "ok"
+          },
+          "created": "2025-11-20T13:46:28.492665"
+        }
+      ],
+      "created": "2025-11-20T13:46:24.114086",
+      "modified": "2025-11-20T13:58:13.955722"
+    },
+    "8d167b4a-5d69-4a4a-82f9-37cd1f2d657b": {
+      "original_id": "1f88_chain_B",
+      "aliases": [],
+      "formats": {
+        "sequence": {
+          "file_path": "sequence/fasta/entities/1f88_chain_B.fasta",
+          "metadata": {
+            "file_path": "sequence/fasta/entities/1f88_chain_B.fasta",
+            "length": 305,
+            "sequence_id": "1f88_chain_B",
+            "type": "single_sequence",
+            "structure_id": "1f88",
+            "chain_id": "B",
+            "sequence_length": 305,
+            "residue_span": [
+              1,
+              978
+            ],
+            "semantic_role": "chain_sequence",
+            "source_processor": "structure"
+          },
+          "created": "2025-11-20T13:58:13.980904"
+        }
+      },
+      "relationships": [
+        {
+          "type": "annotated_by",
+          "source": "e86168be-3d4e-4897-a66a-91dbd00a97b6",
+          "target": "8d167b4a-5d69-4a4a-82f9-37cd1f2d657b",
+          "metadata": {
+            "table": "opsin_chain_grn",
+            "reference": "Rhodopsin-Human",
+            "normalized_score": 3.9938679245283075,
+            "coverage": 0.8207547169811321,
+            "assigned_positions": 261,
+            "status": "ok"
+          },
+          "created": "2025-11-20T13:46:28.505585"
+        }
+      ],
+      "created": "2025-11-20T13:46:24.143531",
+      "modified": "2025-11-20T13:58:13.980917"
+    },
+    "e86168be-3d4e-4897-a66a-91dbd00a97b6": {
+      "original_id": "opsin_chain_grn",
+      "aliases": [],
+      "formats": {
+        "grn": {
+          "file_path": "grn/tables/opsin_chain_grn.csv",
+          "metadata": {
+            "artifact_path": "grn/tables/opsin_chain_grn.csv",
+            "grn_columns": [
+              "1.13",
+              "1.14",
+              "1.15",
+              "1.16",
+              "1.17",
+              "1.18",
+              "1.19",
+              "1.20",
+              "1.21",
+              "1.22",
+              "1.23",
+              "1.24",
+              "1.25",
+              "1.26",
+              "1.27",
+              "1.28",
+              "1.29",
+              "1.30",
+              "1.31",
+              "1.32",
+              "1.33",
+              "1.34",
+              "1.35",
+              "1.36",
+              "1.37",
+              "1.38",
+              "1.39",
+              "1.40",
+              "1.41",
+              "1.411",
+              "1.42",
+              "1.43",
+              "1.44",
+              "1.45",
+              "1.46",
+              "1.47",
+              "1.48",
+              "1.49",
+              "1.50",
+              "1.51",
+              "1.52",
+              "1.53",
+              "1.54",
+              "1.55",
+              "1.56",
+              "1.57",
+              "1.58",
+              "1.59",
+              "1.60",
+              "1.61",
+              "1.62",
+              "1.63",
+              "1.64",
+              "12.47",
+              "12.48",
+              "12.49",
+              "12.50",
+              "12.51",
+              "12.52",
+              "12.53",
+              "2.31",
+              "2.32",
+              "2.33",
+              "2.34",
+              "2.35",
+              "2.36",
+              "2.37",
+              "2.38",
+              "2.39",
+              "2.40",
+              "2.41",
+              "2.42",
+              "2.43",
+              "2.44",
+              "2.45",
+              "2.46",
+              "2.47",
+              "2.48",
+              "2.49",
+              "2.50",
+              "2.51",
+              "2.52",
+              "2.53",
+              "2.54",
+              "2.55",
+              "2.551",
+              "2.56",
+              "2.57",
+              "2.58",
+              "2.59",
+              "2.60",
+              "2.61",
+              "2.62",
+              "2.63",
+              "2.64",
+              "2.65",
+              "2.66",
+              "2.67",
+              "2.68",
+              "2.69",
+              "2.70",
+              "2.71",
+              "23.47",
+              "23.48",
+              "23.49",
+              "23.50",
+              "23.501",
+              "23.51",
+              "23.52",
+              "3.10",
+              "3.11",
+              "3.12",
+              "3.13",
+              "3.14",
+              "3.15",
+              "3.16",
+              "3.17",
+              "3.18",
+              "3.19",
+              "3.20",
+              "3.21",
+              "3.22",
+              "3.23",
+              "3.24",
+              "3.25",
+              "3.26",
+              "3.27",
+              "3.28",
+              "3.29",
+              "3.30",
+              "3.31",
+              "3.32",
+              "3.33",
+              "3.34",
+              "3.35",
+              "3.36",
+              "3.37",
+              "3.38",
+              "3.39",
+              "3.40",
+              "3.41",
+              "3.42",
+              "3.43",
+              "3.44",
+              "3.45",
+              "3.46",
+              "3.47",
+              "3.48",
+              "3.49",
+              "3.50",
+              "3.51",
+              "3.52",
+              "3.53",
+              "3.54",
+              "3.55",
+              "3.56",
+              "3.57",
+              "3.58",
+              "3.59",
+              "3.60",
+              "34.50",
+              "34.51",
+              "34.52",
+              "34.53",
+              "34.54",
+              "34.55",
+              "34.56",
+              "34.57",
+              "34.58",
+              "34.59",
+              "4.34",
+              "4.35",
+              "4.36",
+              "4.37",
+              "4.38",
+              "4.39",
+              "4.40",
+              "4.41",
+              "4.42",
+              "4.43",
+              "4.44",
+              "4.45",
+              "4.46",
+              "4.47",
+              "4.48",
+              "4.49",
+              "4.491",
+              "4.50",
+              "4.51",
+              "4.52",
+              "4.53",
+              "4.54",
+              "4.55",
+              "4.56",
+              "4.57",
+              "4.58",
+              "4.59",
+              "4.60",
+              "4.61",
+              "4.62",
+              "4.63",
+              "4.64",
+              "4.65",
+              "4.66",
+              "4.67",
+              "4.68",
+              "4.69",
+              "45.50",
+              "45.51",
+              "45.52",
+              "5.24",
+              "5.25",
+              "5.26",
+              "5.27",
+              "5.28",
+              "5.29",
+              "5.30",
+              "5.31",
+              "5.32",
+              "5.33",
+              "5.34",
+              "5.35",
+              "5.36",
+              "5.37",
+              "5.38",
+              "5.39",
+              "5.40",
+              "5.41",
+              "5.411",
+              "5.42",
+              "5.421",
+              "5.43",
+              "5.44",
+              "5.45",
+              "5.46",
+              "5.461",
+              "5.47",
+              "5.48",
+              "5.49",
+              "5.50",
+              "5.51",
+              "5.52",
+              "5.53",
+              "5.54",
+              "5.55",
+              "5.56",
+              "5.57",
+              "5.58",
+              "5.59",
+              "5.60",
+              "5.61",
+              "5.62",
+              "5.63",
+              "5.64",
+              "5.65",
+              "5.66",
+              "5.67",
+              "5.68",
+              "5.69",
+              "5.70",
+              "5.71",
+              "5.72",
+              "5.73",
+              "5.74",
+              "5.75",
+              "5.76",
+              "5.77",
+              "5.78",
+              "5.79",
+              "5.80",
+              "5.81",
+              "5.82",
+              "5.83",
+              "5.84",
+              "5.85",
+              "5.86",
+              "6.14",
+              "6.15",
+              "6.16",
+              "6.17",
+              "6.18",
+              "6.19",
+              "6.20",
+              "6.21",
+              "6.22",
+              "6.23",
+              "6.24",
+              "6.25",
+              "6.26",
+              "6.27",
+              "6.28",
+              "6.29",
+              "6.30",
+              "6.31",
+              "6.32",
+              "6.33",
+              "6.34",
+              "6.35",
+              "6.36",
+              "6.37",
+              "6.38",
+              "6.39",
+              "6.40",
+              "6.41",
+              "6.42",
+              "6.43",
+              "6.44",
+              "6.45",
+              "6.46",
+              "6.461",
+              "6.47",
+              "6.48",
+              "6.49",
+              "6.50",
+              "6.51",
+              "6.52",
+              "6.53",
+              "6.54",
+              "6.55",
+              "6.56",
+              "6.57",
+              "6.58",
+              "6.59",
+              "6.60",
+              "6.61",
+              "6.62",
+              "6.63",
+              "6.64",
+              "6.65",
+              "6.66",
+              "6.67",
+              "6.68",
+              "6.69",
+              "6.70",
+              "6.71",
+              "6.72",
+              "6.73",
+              "6.74",
+              "6.75",
+              "6.76",
+              "6.77",
+              "6.78",
+              "6.79",
+              "6.80",
+              "6.81",
+              "7.23",
+              "7.24",
+              "7.25",
+              "7.26",
+              "7.27",
+              "7.28",
+              "7.29",
+              "7.30",
+              "7.31",
+              "7.32",
+              "7.33",
+              "7.34",
+              "7.35",
+              "7.36",
+              "7.37",
+              "7.38",
+              "7.39",
+              "7.40",
+              "7.41",
+              "7.42",
+              "7.43",
+              "7.44",
+              "7.45",
+              "7.46",
+              "7.47",
+              "7.48",
+              "7.49",
+              "7.50",
+              "7.51",
+              "7.52",
+              "7.521",
+              "7.53",
+              "7.54",
+              "7.55",
+              "7.56",
+              "7.57",
+              "7.58",
+              "7.59",
+              "7.60",
+              "7.61",
+              "7.62",
+              "7.63",
+              "7.64",
+              "8.37",
+              "8.38",
+              "8.39",
+              "8.40",
+              "8.41",
+              "8.42",
+              "8.43",
+              "8.44",
+              "8.45",
+              "8.46",
+              "8.47",
+              "8.48",
+              "8.49",
+              "8.50",
+              "8.51",
+              "8.52",
+              "8.53",
+              "8.54",
+              "8.55",
+              "8.56",
+              "8.57",
+              "8.58",
+              "8.59",
+              "8.60",
+              "8.61",
+              "8.62",
+              "8.63",
+              "8.64",
+              "8.65",
+              "8.66",
+              "8.67",
+              "8.68",
+              "8.69",
+              "8.70",
+              "8.71",
+              "8.72",
+              "0.00",
+              "0.01",
+              "0.02",
+              "0.03",
+              "0.04",
+              "0.05",
+              "0.06",
+              "0.07",
+              "0.08",
+              "0.09",
+              "0.10",
+              "0.11",
+              "0.12",
+              "0.13",
+              "0.14",
+              "0.15",
+              "0.16",
+              "0.17",
+              "0.18",
+              "0.19",
+              "0.20",
+              "0.21",
+              "0.22",
+              "0.23",
+              "0.24",
+              "0.25",
+              "0.26",
+              "0.27",
+              "0.28",
+              "0.29",
+              "0.30",
+              "0.31",
+              "0.32",
+              "0.33",
+              "0.34",
+              "0.35",
+              "0.36",
+              "0.37",
+              "0.38",
+              "0.39",
+              "0.40",
+              "0.41",
+              "0.42",
+              "0.43",
+              "0.44",
+              "0.45",
+              "0.46",
+              "0.47",
+              "0.48",
+              "0.49",
+              "8.73",
+              "8.74",
+              "8.75",
+              "8.76",
+              "8.77",
+              "8.78",
+              "8.79",
+              "8.80",
+              "8.81",
+              "8.82",
+              "8.83",
+              "8.84",
+              "8.85",
+              "8.86",
+              "8.87",
+              "8.88",
+              "8.89",
+              "8.90",
+              "8.91",
+              "8.92",
+              "8.93",
+              "8.94",
+              "8.95",
+              "8.96",
+              "8.97",
+              "8.98",
+              "8.99",
+              "9.00",
+              "9.01",
+              "9.02",
+              "9.03",
+              "9.04",
+              "9.05",
+              "9.06",
+              "9.07",
+              "9.08",
+              "9.09",
+              "9.10",
+              "9.11",
+              "9.12",
+              "9.13",
+              "9.14",
+              "9.15",
+              "9.16",
+              "9.17",
+              "9.18",
+              "9.19",
+              "9.20",
+              "9.21",
+              "9.22",
+              "9.23",
+              "9.24",
+              "9.25",
+              "9.26",
+              "9.27",
+              "9.28",
+              "9.29",
+              "9.30",
+              "9.31",
+              "9.32",
+              "9.33",
+              "9.34",
+              "9.35",
+              "9.36",
+              "9.37",
+              "9.38",
+              "9.39",
+              "9.40",
+              "9.41",
+              "9.42",
+              "9.43",
+              "9.44",
+              "9.45",
+              "9.46",
+              "9.47",
+              "9.48",
+              "9.49",
+              "9.50",
+              "9.51",
+              "9.52",
+              "9.53",
+              "9.54",
+              "9.55",
+              "9.56",
+              "9.57",
+              "9.58",
+              "9.59",
+              "9.60",
+              "9.61",
+              "9.62",
+              "9.63",
+              "9.64",
+              "9.65",
+              "9.66",
+              "9.67",
+              "9.68",
+              "9.69",
+              "9.70",
+              "9.71"
+            ],
+            "row_count": 4,
+            "reference_table": "gpcrdb_ref",
+            "protein_family": "gpcr_a",
+            "sequence_count": 4,
+            "materialize_entries": false,
+            "annotated": 4,
+            "total": 4,
+            "search": "pairwise",
+            "source_dataset": "opsin_chain_filtered",
+            "source": "structure_prepare_grn_annotations",
+            "table": "opsin_chain_grn"
+          },
+          "created": "2025-11-20T13:58:18.024002"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-20T13:46:28.447891",
+      "modified": "2025-11-20T13:58:18.024022"
+    },
+    "f852767d-7b8b-4648-afb6-8df8c9b1db52": {
+      "original_id": "DOPAMINE_1",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/DOPAMINE_1.pkl",
+          "metadata": {
+            "content_hash": "00960ef1bc290e91bf3ccb5064d8dc692c4b087d21b33e437cc9ea9e908cf5f1",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-24T15:35:44.620060",
+            "atom_count": 25,
+            "entity_type": "ligand",
+            "source_format": "smiles",
+            "canonical_smiles": "CNCCC1=CC(=C(C=C1)O)O"
+          },
+          "created": "2025-11-24T16:35:44.620188"
+        },
+        "molecule": {
+          "file_path": "molecule/records/DOPAMINE_1.json",
+          "metadata": {
+            "kind": "smiles_record",
+            "structure_entity": "DOPAMINE_1"
+          },
+          "created": "2025-11-24T16:35:44.641066"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-24T16:30:49.672370",
+      "modified": "2025-11-24T16:35:44.641085"
+    },
+    "c20fe6ea-af50-4756-9ed2-5373592f531c": {
+      "original_id": "SEROTONIN_2",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/SEROTONIN_2.pkl",
+          "metadata": {
+            "content_hash": "97cd768151bfc42eadbbf33c1c031b2947aa8446cfc0c30ca5fb71e072609feb",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-24T15:35:44.713270",
+            "atom_count": 32,
+            "entity_type": "ligand",
+            "source_format": "smiles",
+            "canonical_smiles": "C1=CC(=C(C=C1CCN)O)OCC2=NOC(=N2)N"
+          },
+          "created": "2025-11-24T16:35:44.713390"
+        },
+        "molecule": {
+          "file_path": "molecule/records/SEROTONIN_2.json",
+          "metadata": {
+            "kind": "smiles_record",
+            "structure_entity": "SEROTONIN_2"
+          },
+          "created": "2025-11-24T16:35:44.736150"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-24T16:30:49.737405",
+      "modified": "2025-11-24T16:35:44.736169"
+    },
+    "5fa64873-5b61-41a2-bb3d-c8496b4d217c": {
+      "original_id": "HISTAMINE_3",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/HISTAMINE_3.pkl",
+          "metadata": {
+            "content_hash": "afa08348aa5e3545c0ed5c774fc02d7023f5444ac0b4ae2f7f9c8145cabbaff7",
+            "schema_version": "1.0",
+            "saved_at": "2025-11-24T15:35:44.788867",
+            "atom_count": 17,
+            "entity_type": "ligand",
+            "source_format": "smiles",
+            "canonical_smiles": "NCCC1=CN=CN1"
+          },
+          "created": "2025-11-24T16:35:44.788959"
+        },
+        "molecule": {
+          "file_path": "molecule/records/HISTAMINE_3.json",
+          "metadata": {
+            "kind": "smiles_record",
+            "structure_entity": "HISTAMINE_3"
+          },
+          "created": "2025-11-24T16:35:44.810854"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-24T16:30:49.790169",
+      "modified": "2025-11-24T16:35:44.810873"
+    },
+    "39af8f74-b7de-4143-a7d4-5e6f217e1e3b": {
+      "original_id": "5D5A",
+      "aliases": [],
+      "formats": {
+        "structure": {
+          "file_path": "structure/cache/5D5A.pkl",
+          "metadata": {
+            "auto_discovered": true
+          },
+          "created": "2025-11-24T16:32:02.230784"
+        }
+      },
+      "relationships": [],
+      "created": "2025-11-24T16:32:02.230765",
+      "modified": "2025-11-24T16:32:02.230787"
     }
   },
   "name_index": {
@@ -1807,6 +2849,19 @@
     "SINGLE_SEQ": "742802b0-fa97-4b78-be9d-3927f38fcbf7",
     "SEQ_ALPHA": "9eee7ae1-3f94-4c26-9910-8af58c49ab2b",
     "SEQ_BETA": "8ecca6ec-ff2d-4891-99d6-465a52e85b9c",
-    "lambda_gpcr_predictions": "245df9f2-fbce-4a68-a219-2e5878897855"
+    "lambda_gpcr_predictions": "245df9f2-fbce-4a68-a219-2e5878897855",
+    "1U19": "4e7b2b80-9178-4642-883e-0b283699b3d9",
+    "1F88": "29a20f7c-a8d6-432d-a571-d9c226ec1523",
+    "1u19": "aa4e9c75-0304-48b0-91b1-040aee43f829",
+    "1f88": "b2f30cc0-feb1-4341-ac89-2e865470e0df",
+    "1u19_chain_A": "d8ac9f53-42f0-4663-a763-542971de677b",
+    "1u19_chain_B": "2d02063e-8238-47be-aad4-95c130f60453",
+    "1f88_chain_A": "0339ae0c-cd8b-453b-819f-17d8f037dbd2",
+    "1f88_chain_B": "8d167b4a-5d69-4a4a-82f9-37cd1f2d657b",
+    "opsin_chain_grn": "e86168be-3d4e-4897-a66a-91dbd00a97b6",
+    "DOPAMINE_1": "f852767d-7b8b-4648-afb6-8df8c9b1db52",
+    "SEROTONIN_2": "c20fe6ea-af50-4756-9ed2-5373592f531c",
+    "HISTAMINE_3": "5fa64873-5b61-41a2-bb3d-c8496b4d217c",
+    "5D5A": "39af8f74-b7de-4143-a7d4-5e6f217e1e3b"
   }
 }

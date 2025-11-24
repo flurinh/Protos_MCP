@@ -23,16 +23,18 @@ This reference explains how the Protos processors, datasets, and MCP tools fit t
 ## Model Integration Workflows
 - `ModelManager` mediates between processors and external/in-process models using declarative model cards (input/output specs plus execution metadata).
 - **External config adapters** (e.g., Boltz-2) package datasets into YAML/FASTA bundles and hand back a `PreparedJob` for schedulers.
-- **Runtime adapters** (e.g., Lambda) hydrate processors directly, call into `StandardModel`, and return predictions immediately.
-- MCP tools surface helper stages: `model_lambda_prepare_resources` copies packaged configs, while `model_lambda_run` handles dataset registration, GRN annotation, embedding fallback, and Lambda prediction end-to-end.
+- **Runtime adapters** hydrated processors directly, but after the remote rework Lambda now follows the external-job path: ModelManager packages artifacts and produces a submission script even for Lambda runs.
+- MCP tools surface helper stages: `model_lambda_prepare_resources` copies packaged configs, while `model_lambda_run` handles dataset registration, GRN annotation, embedding fallback, and finally returns either inline predictions or (the default) a prepared job payload.
+- Example drivers under `workflows/` showcase these flows: `model_lambda_via_tools.py` for Lambda submissions, `boltz_sequence_prediction_via_tools.py` for Boltz jobs, and `smiles_docking_via_tools.py` for SMILES‑driven docking prep.
 
 ### Lambda (Adapter‑Centric, Zero‑Config)
 - Embeddings now run via embedding model cards (`embedding_ankh_large`, `embedding_esm2_t12_35m`, etc.). The Lambda adapter treats `embedding_dataset` as optional and computes embeddings on‑the‑fly when absent.
 - Packaged configs only: the adapter resolves `binding_domain2.json` and `final_mapping7.csv` from `protos/src/protos/models/lambda/lmda/configs/` and passes explicit paths into Predictor at construction. A job‑local snapshot (`lambda_run_config.json`) is written under `data/models/lambda/run_<ts>/outputs/`.
-- Outputs: property tables are registered via `PropertyProcessor` (under `data/property/tables/`); attention and other intermediates can be added to `ingest_outputs` if needed.
+- Job-first submissions: by default `ModelManager.prepare('lambda')` now yields a `PreparedJob` with packaged inputs, command, and working directory. When optional on-box dependencies are present the runtime path still works, but MCP tooling (`model_lambda_run`) always reports the `mode` (`runtime` vs `job`) so callers can branch accordingly.
+- Outputs: when the runtime executes locally, property tables are registered via `PropertyProcessor` (under `data/property/tables/`); in the submission-only path the packaged job metadata contains the snapshot locations agents must upload to remote accelerators.
 - Logging: ModelManager and the adapter emit INFO logs summarizing inputs, resource resolution, embedding source, alignment counts, and snapshot paths.
 
-Next: update the MCP tools and server routes to reflect these changes (embedding cards, Lambda adapter flow, and GRN‑aware mutation helpers) so agent workflows can leverage the new zero‑config paths and staging.
+Next: update the MCP tools and server routes to reflect these changes (embedding cards, Lambda adapter flow, GRN‑aware mutation helpers, and the new SMILES‑to‑docking workflow) so agent workflows can leverage the zero‑config paths and staging.
 
 ### Embeddings via ModelManager
 - Use `ModelManager.prepare('embedding_<model>')` with inputs `{'sequence_dataset': <name>}` and config `{'embedding_type': 'per_residue'|'mean'|'sum'}`.
@@ -104,6 +106,7 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `ligand_dataset_stats` | Summarize a ligand dataset (entity count, metadata). | `analysis/ligand.py` |
 | `ligand_record_interactions` | Record ligand interaction rows into a property table. | `analysis/ligand.py` |
 | `ligand_register_smiles` | Register SMILES records as ligand entities and persist a dataset. | `analysis/ligand.py` |
+| `ligand_import_smiles_structures` | Ingest SMILES strings as structure entities (plus molecule datasets) via `LigandLoader`, optionally building 3D coordinates for downstream docking. | `analysis/ligand.py` |
 | `list_ligand_entities` | List registered ligand entities with optional pagination. | `analysis/ligand.py` |
 | `load_ligand_dataset` | Summarize a ligand dataset and optionally preview member entities. | `analysis/ligand.py` |
 | `load_ligand_entity` | Load a ligand entity and preview its metadata. | `analysis/ligand.py` |

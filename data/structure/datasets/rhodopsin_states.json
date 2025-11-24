@@ -1,0 +1,18 @@
+{
+  "name": "rhodopsin_states",
+  "processor_type": "structure",
+  "entities": [
+    "1U19",
+    "1F88"
+  ],
+  "entity_ids": [
+    "4e7b2b80-9178-4642-883e-0b283699b3d9",
+    "29a20f7c-a8d6-432d-a571-d9c226ec1523"
+  ],
+  "metadata": {
+    "source": "manual_repo_registration",
+    "description": "Rhodopsin state structures from local protos/data assets"
+  },
+  "created": "2025-11-20T13:46:23.787355",
+  "modified": "2025-11-20T13:46:23.787366"
+}
