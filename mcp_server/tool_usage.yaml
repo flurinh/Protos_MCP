@@ -1,4 +1,12 @@
 # Enriched MCP tool metadata consumed by guide_tool_help.
+# Last updated: 2026-01-29
+# Note: Tools operate in LLM-safe mode by default, returning summaries instead of full data.
+# Use explicit flags (include_sequences=True, include_embeddings=True) when full data is needed.
+
+# ============================================================================
+# ENTITY & DATASET OPERATIONS
+# ============================================================================
+
 download_entity:
   summary: Download and register a single entity through the appropriate loader (structure→StructureLoader, sequence→SequenceLoader).
   arguments:
@@ -98,5 +106,420 @@ structure_prepare_grn_annotations:
     - workflows/structure_grn_annotation_via_tools.py
   tips:
     - Set chain_dataset_prefix/filtered_sequence_dataset/grn_table_name if you want predictable dataset names; otherwise sensible defaults are used.
-    - The tool returns alignment metrics, filtered entity names, the GRN table name, and the summary from structure_apply_grn_annotations for follow-up inspection.
+    - The tool returns alignment metrics, filtered enti§ty names, the GRN table name, and the summary from structure_apply_grn_annotations for follow-up inspection.
   example: structure_prepare_grn_annotations(structure_ids=['3sn6','5d5a'], reference_table='gpcrdb_ref', protein_family='gpcr_a', reference_sequence_entity='5d5a_chain_A', alignment_threshold=0.7)
+
+# ============================================================================
+# GRN QUERY TOOLS (New - use these to inspect GRN tables without flooding context)
+# ============================================================================
+
+grn_query_entity:
+  summary: Query GRN annotations for a specific entity from a GRN table. Returns only that entity's data.
+  arguments:
+    grn_table: Name of the GRN table (from sequence_annotate_with_grn output_table)
+    entity_id: ID of the entity to query (e.g., 'ADRB2_HUMAN', '5d5a_chain_A')
+    positions: Optional list of specific GRN positions to retrieve (e.g., ["1.50", "2.50"])
+  workflows:
+    - workflows/grn_workflow_via_tools.py
+  tips:
+    - Use this instead of loading entire GRN tables to inspect individual sequences
+    - Filters out gap positions by default for cleaner output
+    - Combine with grn_query_position for comprehensive analysis
+  example: grn_query_entity(grn_table='gpcr_grn_demo', entity_id='ADRB2_HUMAN', positions=['1.50', '2.50', '3.50'])
+
+grn_query_position:
+  summary: Get amino acid distribution at specific GRN positions across all entities in a table.
+  arguments:
+    grn_table: Name of the GRN table
+    positions: List of GRN positions to analyze (e.g., ["1.50", "2.50", "3.50"])
+    include_entity_details: If True, include per-entity residues (limited to 20)
+  workflows:
+    - workflows/grn_workflow_via_tools.py
+  tips:
+    - Perfect for conservation analysis - shows which amino acids appear at each position
+    - Returns coverage, most common AA, and full distribution per position
+    - Use include_entity_details=True sparingly to avoid large responses
+  example: grn_query_position(grn_table='gpcr_grn_demo', positions=['1.50', '2.50', '3.50', '7.50'])
+
+# ============================================================================
+# SEQUENCE ANALYSIS TOOLS
+# ============================================================================
+
+align_sequences:
+  summary: Perform pairwise sequence alignment between two raw sequences.
+  arguments:
+    sequence1: First sequence string
+    sequence2: Second sequence string
+    method: Alignment method - 'local' (Smith-Waterman) or 'global' (Needleman-Wunsch)
+  tips:
+    - Use align_sequences_by_id when working with registered entities
+    - Returns full alignment text - suitable for small sequences
+  example: align_sequences(sequence1='MKTII...', sequence2='MGQPG...', method='global')
+
+align_sequences_by_id:
+  summary: Align two registered sequence entities by their IDs.
+  arguments:
+    entity1: First sequence entity ID
+    entity2: Second sequence entity ID
+    include_alignment: If False (default in LLM-safe mode), returns only statistics
+  workflows:
+    - workflows/property_workflow_via_tools.py
+    - workflows/grn_workflow_via_tools.py
+  tips:
+    - Set include_alignment=True only when you need the full aligned sequences
+    - Returns score, identity, gaps count, and alignment length
+  example: align_sequences_by_id(entity1='ADRB2_HUMAN', entity2='DRD2_HUMAN', include_alignment=False)
+
+sequence_align_mmseqs:
+  summary: Run MMseqs2 all-vs-all alignment on a sequence dataset. Fast for large datasets.
+  arguments:
+    dataset_name: Name of the sequence dataset
+    target_dataset: Optional second dataset for cross-comparison
+  workflows:
+    - workflows/sequence_real_workflow_via_tools.py
+  tips:
+    - Much faster than pairwise alignment for >10 sequences
+    - Returns table with query, target, identity, coverage columns
+    - In LLM-safe mode, returns first 20 rows; use for overview then query specifics
+  example: sequence_align_mmseqs(dataset_name='gpcr_sequences')
+
+load_sequence:
+  summary: Load a single sequence entity with optional full sequence inclusion.
+  arguments:
+    sequence_id: Entity ID to load
+    include_sequence: If True, include full sequence in response (default False in LLM-safe mode)
+  tips:
+    - Default returns length, preview, and metadata without full sequence
+    - Set include_sequence=True when you need the actual sequence for processing
+  example: load_sequence(sequence_id='ADRB2_HUMAN', include_sequence=False)
+
+load_sequence_dataset:
+  summary: Load a sequence dataset with statistics and optional full sequences.
+  arguments:
+    dataset_name: Name of the dataset
+    include_sequences: If True, include all sequences (can be large!)
+    max_sequences: Limit number of sequences returned
+  tips:
+    - Default returns entity list and statistics without sequences
+    - Use include_sequences=True only when you need to process the actual sequences
+  example: load_sequence_dataset(dataset_name='gpcr_sequences', include_sequences=False)
+
+# ============================================================================
+# STRUCTURE ANALYSIS TOOLS
+# ============================================================================
+
+load_structure:
+  summary: Load a structure entity with LLM-safe atom preview.
+  arguments:
+    structure_id: PDB ID or registered structure name
+    max_atoms: Maximum atoms to include in preview (default 10 in LLM-safe mode)
+  tips:
+    - Never returns full structure DataFrames to avoid context flooding
+    - Use structure analysis tools for specific queries (binding sites, ligands, etc.)
+    - Structures are cached in Protos context for subsequent analysis calls
+  example: load_structure(structure_id='5d5a', max_atoms=10)
+
+structure_get_binding_site_residues:
+  summary: Get residues within a distance cutoff of a ligand.
+  arguments:
+    pdb_id: Structure identifier
+    ligand_name: Three-letter ligand code (e.g., 'ATP', 'CAU')
+    chain_id: Optional chain specification
+    cutoff: Distance cutoff in Angstroms (default 5.0)
+    save_to_table: Optional property table name to save results
+  workflows:
+    - workflows/input_molecule_workflow.py
+  tips:
+    - Returns full binding site data - essential for reasoning about interactions
+    - Use extract_ligands_from_structure first to find valid ligand names
+    - Can save to property table for cross-structure comparison
+  example: structure_get_binding_site_residues(pdb_id='5d5a', ligand_name='CAU', cutoff=5.0)
+
+structure_analyze_binding_pocket:
+  summary: Comprehensive binding pocket analysis including volume, hydrophobicity, and residue composition.
+  arguments:
+    pdb_id: Structure identifier
+    ligand_name: Three-letter ligand code
+    cutoff: Distance cutoff (default 5.0)
+  tips:
+    - Returns detailed pocket statistics for drug design reasoning
+    - Includes residue composition, polar/hydrophobic balance, and pocket volume
+    - Unrestricted output - binding pocket data is essential for analysis
+  example: structure_analyze_binding_pocket(pdb_id='5d5a', ligand_name='CAU', cutoff=5.0)
+
+structure_compare_ligand_binding_sites:
+  summary: Compare binding sites across multiple structures.
+  arguments:
+    structures: List of dicts with pdb_id and ligand_name keys
+    cutoff: Distance cutoff for binding site definition
+    save_to_table: Optional table name to save comparison
+  workflows:
+    - workflows/input_molecule_workflow.py
+  tips:
+    - Useful for comparing binding sites across receptor subtypes or species
+    - Returns Jaccard similarity and shared/unique residues
+    - Structures must be downloaded first
+  example: |
+    structure_compare_ligand_binding_sites(
+      structures=[
+        {'pdb_id': '5d5a', 'ligand_name': 'CAU'},
+        {'pdb_id': '6b73', 'ligand_name': 'CAU'}
+      ],
+      cutoff=5.0
+    )
+
+structure_extract_water_molecules:
+  summary: Extract water molecules from a structure for water network analysis.
+  arguments:
+    pdb_id: Structure identifier
+    min_atoms: Minimum atoms per water (default 1)
+  workflows:
+    - workflows/structure_water_network_via_tools.py
+  tips:
+    - Returns sanitized water positions (centroid coordinates)
+    - Use with structure_compute_water_networks for network analysis
+  example: structure_extract_water_molecules(pdb_id='5d5a', min_atoms=1)
+
+structure_compute_water_networks:
+  summary: Compute water-mediated interaction networks in structures.
+  arguments:
+    structure_ids: List of structure IDs to analyze
+    cutoff: Distance cutoff for water-residue contacts
+    property_table_name: Optional table to save network statistics
+  workflows:
+    - workflows/structure_water_network_via_tools.py
+  tips:
+    - Identifies water bridges between residues
+    - GRN annotations are included when structures have been annotated
+    - Save to property table for cross-structure comparison
+  example: structure_compute_water_networks(structure_ids=['3sn6', '5d5a'], cutoff=3.5, property_table_name='water_networks')
+
+extract_ligands_from_structure:
+  summary: List all ligands in a structure with their properties.
+  arguments:
+    pdb_id: Structure identifier
+    exclude_common: Exclude common molecules like water, ions (default True)
+    min_atoms: Minimum atom count to include (default 3)
+  workflows:
+    - workflows/ligand_workflow_via_tools.py
+    - workflows/input_molecule_workflow.py
+  tips:
+    - Always run this first to discover valid ligand names
+    - Returns ligand ID, residue name, chain, atom count, and centroid
+  example: extract_ligands_from_structure(pdb_id='5d5a', exclude_common=True, min_atoms=4)
+
+# ============================================================================
+# LIGAND ANALYSIS TOOLS
+# ============================================================================
+
+search_similar_ligands:
+  summary: Find similar molecules in registered ligands using Tanimoto similarity.
+  arguments:
+    query_smiles: SMILES string of query molecule
+    similarity_threshold: Minimum similarity (0-1, default 0.5)
+    dataset: Optional ligand dataset to search
+    search_chembl: Search ChEMBL database (requires network)
+    max_results: Maximum results to return
+  workflows:
+    - workflows/input_molecule_workflow.py
+  tips:
+    - Requires RDKit for fingerprint calculation
+    - Returns list of similar ligands with similarity scores
+    - Use for lead compound discovery or scaffold hopping
+  example: search_similar_ligands(query_smiles='CC(=O)Oc1ccccc1C(=O)O', similarity_threshold=0.6)
+
+ligand_calculate_molecular_properties:
+  summary: Calculate molecular properties (MW, LogP, TPSA, etc.) from SMILES.
+  arguments:
+    smiles: SMILES string or list of SMILES
+  tips:
+    - Returns drug-likeness indicators (Lipinski rule of 5)
+    - Small molecule data is always returned in full (LLM-safe)
+  example: ligand_calculate_molecular_properties(smiles='CC(=O)Oc1ccccc1C(=O)O')
+
+filter_drug_like_ligands:
+  summary: Filter ligands by Lipinski's rule of 5 or custom criteria.
+  arguments:
+    dataset_name: Ligand dataset to filter
+    mw_max: Maximum molecular weight (default 500)
+    logp_max: Maximum LogP (default 5)
+    hbd_max: Maximum H-bond donors (default 5)
+    hba_max: Maximum H-bond acceptors (default 10)
+  tips:
+    - Useful for filtering compound libraries for drug-like properties
+    - Returns entities that pass all criteria
+  example: filter_drug_like_ligands(dataset_name='chembl_hits', mw_max=450)
+
+# ============================================================================
+# EMBEDDING TOOLS
+# ============================================================================
+
+embedding_generate:
+  summary: Generate sequence embeddings using ESM2, ANKH, or other models.
+  arguments:
+    dataset_name: Sequence dataset to embed
+    model_name: Model to use (e.g., 'esm2_t33_650M_UR50D')
+    pooling: Pooling method - 'mean', 'cls', or 'per_residue'
+    output_dataset: Name for the output embedding dataset
+  workflows:
+    - workflows/structure_embedding_similarity_via_tools.py
+  tips:
+    - Embeddings are stored, not returned (too large for LLM context)
+    - Use embedding_cosine_similarity to analyze stored embeddings
+    - Mean pooling gives one vector per sequence; per_residue for residue-level analysis
+  example: embedding_generate(dataset_name='gpcr_sequences', model_name='esm2_t33_650M_UR50D', pooling='mean')
+
+embedding_cosine_similarity:
+  summary: Calculate cosine similarity between embedding datasets.
+  arguments:
+    dataset1: First embedding dataset
+    dataset2: Second embedding dataset (or same for self-comparison)
+    top_k: Return top K most similar pairs
+  tips:
+    - Returns similarity matrix statistics and top pairs
+    - Raw embeddings never returned to LLM context
+  example: embedding_cosine_similarity(dataset1='gpcr_esm_embeddings', dataset2='gpcr_esm_embeddings', top_k=10)
+
+# ============================================================================
+# PROPERTY TOOLS
+# ============================================================================
+
+create_property_table:
+  summary: Create a new property table from arbitrary key-value data. Perfect for storing model knowledge.
+  arguments:
+    dataset_name: Name for the property table
+    data: "Dict mapping entity_id to properties, e.g. {'ADRB2': {'family': 'Adrenergic'}}"
+    metadata: Optional metadata dict
+  workflows:
+    - workflows/property_workflow_via_tools.py
+  tips:
+    - Scope is auto-generated - just provide entity IDs and their properties
+    - Use update_property_values to modify cells after creation
+    - Perfect for storing structured knowledge (gene families, annotations, etc.)
+  example: |
+    create_property_table(
+      dataset_name='receptor_families',
+      data={
+        'ADRB2': {'family': 'Adrenergic', 'type': 'GPCR'},
+        'DRD2': {'family': 'Dopamine', 'type': 'GPCR'},
+      },
+      metadata={'source': 'curated'}
+    )
+
+update_property_values:
+  summary: Update specific cells in a property table without replacing the entire table.
+  arguments:
+    dataset_name: Name of the property table
+    updates: "Dict mapping entity_id to properties to update"
+  tips:
+    - Can add new entities (rows) or new properties (columns) automatically
+    - Only modifies specified cells, leaves others unchanged
+    - Use for incremental knowledge updates
+  example: |
+    update_property_values(
+      dataset_name='receptor_families',
+      updates={
+        'ADRB2': {'affinity_Ki': 2.5, 'notes': 'Beta-2 receptor'},
+        'HTR2A': {'family': 'Serotonin'}  # Add new entity
+      }
+    )
+
+delete_property_rows:
+  summary: Delete specific entities (rows) from a property table.
+  arguments:
+    dataset_name: Name of the property table
+    entity_ids: List of entity IDs to delete
+  tips:
+    - Returns list of deleted and not-found entities
+    - Use for cleaning up incorrect entries
+  example: delete_property_rows(dataset_name='receptor_families', entity_ids=['WRONG_ID'])
+
+record_property_rows:
+  summary: Add rows to a property table.
+  arguments:
+    dataset_name: Property table name
+    rows: List of row dicts with entity_name, scope, and property values
+    allow_create: Create table if it doesn't exist (default False)
+  workflows:
+    - workflows/property_workflow_via_tools.py
+  tips:
+    - Scope links properties to specific entity formats
+    - Use allow_create=True for new tables
+  example: |
+    record_property_rows(
+      dataset_name='alignment_scores',
+      rows=[{'entity_name': 'seq1', 'score': 0.85, 'scope': [{'format': 'sequence', 'name': 'seq1'}]}],
+      allow_create=True
+    )
+
+get_property_statistics:
+  summary: Calculate statistics for property table columns.
+  arguments:
+    table_name: Property table name
+    columns: List of columns to analyze (numeric)
+  tips:
+    - Returns mean, std, min, max, quartiles for each column
+    - Useful for understanding property distributions
+  example: get_property_statistics(table_name='binding_affinities', columns=['Ki', 'IC50'])
+
+# ============================================================================
+# MODEL PREPARATION TOOLS
+# ============================================================================
+
+model_prepare_job:
+  summary: Prepare a model job (Boltz2, UniDock, etc.) with input files and configuration.
+  arguments:
+    model_name: Model identifier (e.g., 'boltz2', 'unidock')
+    inputs: Dict of input specifications (sequences, structures, ligands)
+    config: Model-specific configuration
+  workflows:
+    - workflows/smiles_docking_via_tools.py
+    - workflows/model_lambda_via_tools.py
+  tips:
+    - Creates working directory with all required files
+    - Returns command to run and output directory
+    - Use structure_export_entity first for receptor preparation
+  example: |
+    model_prepare_job(
+      model_name='unidock',
+      inputs={'receptor_pdb': '5d5a', 'ligand_smiles': 'CCO'},
+      config={'search_mode': 'fast', 'num_modes': 5}
+    )
+
+# ============================================================================
+# INPUT LOADER TOOLS
+# ============================================================================
+
+input_scan:
+  summary: Scan the input directory for importable files (SDF, FASTA, PDB, etc.).
+  arguments:
+    file_types: Optional list of extensions to filter (e.g., ['.sdf', '.pdb'])
+  tips:
+    - Use before input_register to see what files are available
+    - Shows file size, type detection, and suggested import tool
+  example: input_scan(file_types=['.sdf', '.fasta'])
+
+input_register:
+  summary: Import a file from the input directory into Protos.
+  arguments:
+    filename: Name of file in input directory
+    entity_name: Optional custom entity name
+    processor_type: Target processor (auto-detected if not specified)
+  tips:
+    - Auto-detects format from extension
+    - Registers entity in appropriate processor
+  example: input_register(filename='my_ligand.sdf', entity_name='custom_ligand')
+
+import_sdf_to_protos:
+  summary: Import SDF file with molecules into the molecule processor.
+  arguments:
+    sdf_path: Path to SDF file (in input directory)
+    dataset_name: Name for the structure dataset
+    molecule_dataset_name: Name for the molecule record dataset
+    overwrite: Overwrite existing entities
+  workflows:
+    - workflows/input_molecule_workflow.py
+  tips:
+    - Creates both 3D structures and molecule records (with SMILES)
+    - Use for docking preparation workflows
+  example: import_sdf_to_protos(sdf_path='data/input/ligand.sdf', dataset_name='imported_ligands')

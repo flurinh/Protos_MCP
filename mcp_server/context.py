@@ -5,6 +5,7 @@ This module defines the ServerContext that holds all shared state including
 ProtosPaths, EntityRegistry, processors, and configuration.
 """
 
+import json
 import os
 import sys
 from dataclasses import dataclass, field
@@ -29,6 +30,10 @@ from .config import ServerConfig
 from .core.exceptions import ProcessorInitializationError
 from .core.session import SessionState
 from .core.tool_catalog import ToolCatalog
+from .core.rate_limiter import RateLimiter, RateLimitConfig
+from .core.logging_config import get_logger, log_server_event
+
+logger = get_logger("context")
 
 
 @dataclass
@@ -39,6 +44,7 @@ class ServerContext:
     processors: Dict[str, BaseProcessor] = field(default_factory=dict)
     session_state: SessionState = field(default_factory=SessionState)
     tool_catalog: ToolCatalog = field(default_factory=ToolCatalog)
+    rate_limiter: RateLimiter = field(default_factory=lambda: RateLimiter(RateLimitConfig.default()))
     _paths: Optional[ProtosPaths] = field(default=None, init=False, repr=False)
     _entity_registry: Optional[EntityRegistry] = field(default=None, init=False, repr=False)
     _protos_ready: bool = field(default=False, init=False, repr=False)
@@ -53,9 +59,9 @@ class ServerContext:
         context = cls(config=config)
         context._apply_environment()
 
-        print(
-            f"ServerContext created with data root: {context.config.data_root} (lazy initialization)",
-            file=sys.stderr,
+        logger.info(
+            "ServerContext created (lazy initialization)",
+            extra={"data_root": str(context.config.data_root)}
         )
 
         return context
@@ -74,9 +80,9 @@ class ServerContext:
             return
 
         try:
-            print(
-                f"Initializing Protos subsystem at: {self.config.data_root}",
-                file=sys.stderr,
+            logger.info(
+                "Initializing Protos subsystem",
+                extra={"data_root": str(self.config.data_root)}
             )
 
             protos.set_data_path(str(self.config.data_root))
@@ -168,6 +174,7 @@ class ServerContext:
                 "tool_count": len(self.tool_catalog.to_dict()["tools"]),
                 "groups": self.tool_catalog.list_groups(),
             },
+            "rate_limits": self.rate_limiter.get_stats(),
         }
 
         if self._entity_registry and hasattr(self._entity_registry, "list_entities"):
@@ -177,6 +184,19 @@ class ServerContext:
                 stats["entity_count"] = -1
 
         return stats
+
+    def persist_tool_catalog(self) -> Optional[Path]:
+        """Write the in-memory tool catalog to the configured path."""
+
+        catalog_path = self.config.tool_catalog_path
+        if catalog_path is None:
+            return None
+
+        data = self.tool_catalog.to_dict()
+        catalog_path.parent.mkdir(parents=True, exist_ok=True)
+        with catalog_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+        return catalog_path
 
     def reset_data(
         self,

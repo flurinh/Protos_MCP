@@ -94,8 +94,20 @@ class EmbeddingAnalysisTools(BaseTool):
             embedding_types: Optional[List[str]] = None,
             save_prefix: Optional[str] = None,
             register_entities: bool = True,
+            device: Optional[str] = None,
         ) -> Dict:
-            """Generate embeddings for a dataset or explicit sequence mapping."""
+            """Generate embeddings for a dataset or explicit sequence mapping.
+
+            Args:
+                model_name: Name of the embedding model to use.
+                dataset_name: Name of sequence dataset to embed.
+                sequences: Explicit mapping of sequence IDs to sequences.
+                embedding_types: Types of embeddings to generate (e.g., ["mean", "cls"]).
+                save_prefix: Prefix for saved embedding dataset names.
+                register_entities: Whether to register embeddings as entities.
+                device: Device to use ('cuda', 'cpu', or None for auto).
+                    Use 'cpu' for large models that don't fit in GPU memory.
+            """
 
             if not dataset_name and not sequences:
                 return self.format_error(
@@ -126,7 +138,7 @@ class EmbeddingAnalysisTools(BaseTool):
                 )
 
             try:
-                emb_proc = EmbeddingProcessor(model_name=model_name)
+                emb_proc = EmbeddingProcessor(model_name=model_name, device=device)
             except Exception as exc:  # noqa: BLE001
                 return self.format_error(
                     f"Failed to initialize embedding models '{model_name}': {exc}",
@@ -157,6 +169,7 @@ class EmbeddingAnalysisTools(BaseTool):
                 except Exception as exc:  # noqa: BLE001
                     results[emb_type] = f"error: {exc}"
 
+            used_device = getattr(emb_proc, "device", device or "auto")
             emb_proc.clear_cache()
 
             return self.format_success(
@@ -164,6 +177,7 @@ class EmbeddingAnalysisTools(BaseTool):
                     "models": model_name,
                     "embedding_types": results,
                     "sequence_count": len(sequence_map),
+                    "device": used_device,
                 }
             )
 
@@ -212,34 +226,41 @@ class EmbeddingAnalysisTools(BaseTool):
             }
 
             if include_embeddings:
-                try:
-                    embeddings = processor.load_embeddings(dataset_name)
-                except Exception as exc:  # noqa: BLE001
-                    return self.format_error(
-                        f"Failed to load embeddings for '{dataset_name}': {exc}",
-                        "Ensure torch is installed and the dataset is intact.",
+                # In LLM-safe mode, don't return raw embedding vectors
+                if self.llm_safe_mode:
+                    payload["embeddings_note"] = (
+                        "Raw embeddings not returned in LLM-safe mode. "
+                        "Use embedding_cosine_similarity for similarity analysis."
                     )
-
-                if sequence_ids:
-                    selected_ids: Iterable[str] = sequence_ids
                 else:
-                    selected_ids = []
-                    for entity in entities:
-                        source = entity.get("metadata", {}).get("source_sequence")
-                        candidate = source or entity.get("name")
-                        if candidate:
-                            selected_ids.append(candidate)
-                        if len(selected_ids) >= limit:
-                            break
+                    try:
+                        embeddings = processor.load_embeddings(dataset_name)
+                    except Exception as exc:  # noqa: BLE001
+                        return self.format_error(
+                            f"Failed to load embeddings for '{dataset_name}': {exc}",
+                            "Ensure torch is installed and the dataset is intact.",
+                        )
 
-                embedding_payload: Dict[str, Any] = {}
-                for seq_id in selected_ids:
-                    vector = embeddings.get(seq_id)
-                    if vector is None:
-                        continue
-                    embedding_payload[seq_id] = _tensor_to_array(vector, truncate_length)
+                    if sequence_ids:
+                        selected_ids: Iterable[str] = sequence_ids
+                    else:
+                        selected_ids = []
+                        for entity in entities:
+                            source = entity.get("metadata", {}).get("source_sequence")
+                            candidate = source or entity.get("name")
+                            if candidate:
+                                selected_ids.append(candidate)
+                            if len(selected_ids) >= limit:
+                                break
 
-                payload["embeddings"] = embedding_payload
+                    embedding_payload: Dict[str, Any] = {}
+                    for seq_id in selected_ids:
+                        vector = embeddings.get(seq_id)
+                        if vector is None:
+                            continue
+                        embedding_payload[seq_id] = _tensor_to_array(vector, truncate_length)
+
+                    payload["embeddings"] = embedding_payload
 
             return self.format_success(payload)
 
@@ -249,8 +270,19 @@ class EmbeddingAnalysisTools(BaseTool):
             dataset_name: str,
             reference_id: str,
             target_ids: Optional[List[str]] = None,
+            save_to_table: Optional[str] = None,
         ) -> Dict:
-            """Compute cosine similarities between embeddings in a dataset."""
+            """Compute cosine similarities between embeddings in a dataset.
+
+            Args:
+                dataset_name: Embedding dataset to analyze.
+                reference_id: Entity to compare against.
+                target_ids: Specific entities to compare (default: all others).
+                save_to_table: If provided, save similarity data to this property table.
+
+            Returns:
+                Similarity results (or save confirmation if save_to_table specified).
+            """
 
             if np is None:
                 return self.format_error(
@@ -320,6 +352,45 @@ class EmbeddingAnalysisTools(BaseTool):
                     {
                         "target_id": target_id,
                         "cosine_similarity": cosine,
+                    }
+                )
+
+            # Save to property table if requested
+            if save_to_table:
+                rows = []
+                for res in results:
+                    rows.append({
+                        "scope": [{"format": "sequence", "name": reference_id}],
+                        "reference_id": reference_id,
+                        "target_id": res["target_id"],
+                        "cosine_similarity": res["cosine_similarity"],
+                        "dataset_name": dataset_name,
+                    })
+                if rows:
+                    prop_proc = self.get_processor("property")
+                    prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                return self.format_success({
+                    "saved": True,
+                    "table": save_to_table,
+                    "rows": len(rows),
+                    "reference_id": reference_id,
+                    "missing_ids": missing,
+                })
+
+            # In LLM-safe mode, limit results to top 20
+            if self.llm_safe_mode:
+                # Sort by similarity and take top 20
+                sorted_results = sorted(results, key=lambda x: x["cosine_similarity"], reverse=True)
+                max_results = 20
+                limited_results = sorted_results[:max_results]
+                return self.format_success(
+                    {
+                        "dataset_name": dataset_name,
+                        "reference_id": reference_id,
+                        "total_comparisons": len(results),
+                        "top_results": limited_results,
+                        "results_note": f"Showing top {len(limited_results)} of {len(results)} results (LLM-safe mode)",
+                        "missing_ids": missing[:10] if missing else [],
                     }
                 )
 

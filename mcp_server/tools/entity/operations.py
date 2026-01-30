@@ -407,18 +407,33 @@ class EntityOperationTools(BaseTool):
                 if skipped_existing:
                     payload["skipped_existing"] = skipped_existing
 
-                if dataset_name and downloaded and create_dataset:
-                    payload["dataset_name"] = dataset_name
+                # Create dataset with all available entities (downloaded + skipped)
+                # even if nothing was newly downloaded
+                all_available = downloaded + [
+                    (self._normalize_structure_id(s) if normalized_type == "structure" else s)
+                    for s in skipped_existing
+                ]
+                dataset_created = False
+                if dataset_name and create_dataset and all_available:
+                    try:
+                        manager = getattr(processor, "dataset_manager", None)
+                        if manager:
+                            manager.create_dataset(
+                                dataset_id=dataset_name,
+                                name=dataset_name,
+                                content=all_available,
+                                metadata=metadata or {},
+                            )
+                            payload["dataset_name"] = dataset_name
+                            dataset_created = True
+                    except Exception as e:
+                        logger.warning(f"Failed to create dataset '{dataset_name}': {e}")
 
                 context_handles = self._build_download_context(
                     tool_name="download_entities",
                     processor_type=normalized_type,
                     downloaded=downloaded,
-                    dataset_name=(
-                        dataset_name
-                        if dataset_name and downloaded and create_dataset
-                        else None
-                    ),
+                    dataset_name=dataset_name if dataset_created else None,
                 )
                 if context_handles:
                     payload["context"] = context_handles
@@ -595,49 +610,41 @@ class EntityOperationTools(BaseTool):
                         }
                     )
 
-                if normalized_format == "base64":
-                    if hasattr(data, "to_json"):
-                        json_str = data.to_json()
-                    elif hasattr(data, "to_dict"):
-                        json_str = json.dumps(data.to_dict())
-                    else:
-                        json_str = json.dumps(data)
-                    size = estimate_payload_size(json_str)
-                    if size > limits.max_bytes:
-                        raise PayloadTooLargeError(size=size, limit=limits.max_bytes)
-                    encoded = base64.b64encode(json_str.encode()).decode()
-                    return self.format_success(
-                        {
-                            "name": resolved_name,
-                            "format": format,
-                            "encoding": "base64",
-                            "data": encoded,
-                        }
-                    )
-
-                # Default to JSON output with guardrails
-                if hasattr(data, "reset_index") and hasattr(data, "to_dict"):
-                    json_data = data.reset_index(drop=True).to_dict(orient="records")
-                elif hasattr(data, "to_dict"):
-                    json_data = data.to_dict()
-                elif hasattr(data, "to_json"):
-                    json_data = json.loads(data.to_json())
-                elif isinstance(data, str):
-                    json_data = {"sequence": data}
-                else:
-                    json_data = data
-
-                size = estimate_payload_size(json_data)
-                if size > limits.max_bytes:
-                    raise PayloadTooLargeError(size=size, limit=limits.max_bytes)
-
-                return self.format_success(
-                    {
+                # For json/base64 formats, return metadata + limited preview only
+                # Full data stays in Protos context, not LLM context
+                if normalized_format in ("base64", "json"):
+                    # Build metadata about the entity
+                    metadata = {
                         "name": resolved_name,
                         "format": format,
-                        "data": json_data,
+                        "loaded": True,
                     }
-                )
+
+                    # Add shape/size info based on data type
+                    if hasattr(data, "shape"):
+                        metadata["rows"] = int(data.shape[0])
+                        metadata["columns"] = int(data.shape[1]) if len(data.shape) > 1 else 1
+                        if hasattr(data, "columns"):
+                            metadata["column_names"] = list(data.columns)[:20]
+                    elif hasattr(data, "__len__"):
+                        metadata["length"] = len(data)
+                    elif isinstance(data, str):
+                        metadata["length"] = len(data)
+                        metadata["preview"] = data[:100] + "..." if len(data) > 100 else data
+
+                    # Add limited preview for DataFrames
+                    # In LLM-safe mode, don't include raw DataFrame preview for structures
+                    if hasattr(data, "head") and hasattr(data, "to_dict"):
+                        if self.llm_safe_mode and format == "structure":
+                            # Structure DataFrames have many columns - just show stats
+                            metadata["preview_note"] = "Structure data loaded. Use structure analysis tools for inspection."
+                        else:
+                            preview_rows = min(5, len(data)) if hasattr(data, "__len__") else 5
+                            metadata["preview_rows"] = data.head(preview_rows).to_dict(orient="records")
+
+                    metadata["note"] = "Full data available in Protos context. Use processor methods for operations."
+
+                    return self.format_success(metadata)
 
             except Exception as e:
                 return self.handle_error(e)

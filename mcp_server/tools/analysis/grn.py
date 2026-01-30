@@ -90,53 +90,57 @@ class GRNAnalysisTools(BaseTool):
             try:
                 # Validate parameters
                 if error := self.validate_required_params(
-                    {"table_name": table_name}, 
+                    {"table_name": table_name},
                     ["table_name"]
                 ):
                     return error
-                
+
                 # Get GRN processor
                 processor = self.get_processor("grn")
-                
-                # Load GRN table
+
+                # Load GRN table using the correct method
                 try:
-                    processor.load_grn_table(table_name)
+                    table_df = processor.load_table(table_name)
                 except Exception as e:
                     return self.format_error(
                         f"Failed to load GRN table '{table_name}': {str(e)}",
                         "Check that the table exists. Use list_grn_tables to see available tables"
                     )
-                
-                if processor.data is None or processor.data.empty:
+
+                if table_df is None or table_df.empty:
                     return self.format_error(
-                        f"GRN table '{table_name}' is empty",
-                        "The table exists but contains no data"
+                        f"GRN table '{table_name}' is empty or not found",
+                        "The table may not exist. Use list_grn_tables to see available tables"
                     )
-                
-                # Get statistics
-                num_sequences = len(processor.data)
-                num_positions = len(processor.data.columns)
-                
-                # Get coverage statistics
+
+                # Get statistics from the loaded DataFrame
+                num_sequences = len(table_df)
+                num_positions = len(table_df.columns)
+
+                # Get coverage statistics (limit to first 10 for memory efficiency)
                 coverage_stats = {}
-                for seq_id in processor.data.index[:10]:  # First 10 for summary
-                    row = processor.data.loc[seq_id]
+                for seq_id in table_df.index[:10]:
+                    row = table_df.loc[seq_id]
                     assigned = (row != '-').sum()
-                    coverage_stats[seq_id] = round(assigned / num_positions, 3)
+                    coverage_stats[seq_id] = round(assigned / num_positions, 3) if num_positions > 0 else 0.0
                 
-                # Sample positions
-                sample_positions = list(processor.data.columns[:20])
-                
+                # Sample positions (memory-efficient: only first 20)
+                sample_positions = list(table_df.columns[:20])
+
+                # Calculate average coverage efficiently
+                avg_coverage = 0.0
+                if num_sequences > 0 and num_positions > 0:
+                    total_assigned = (table_df != '-').sum().sum()
+                    avg_coverage = round(total_assigned / (num_sequences * num_positions), 3)
+
                 return self.format_success({
                     "table_name": table_name,
                     "num_sequences": num_sequences,
                     "num_positions": num_positions,
-                    "sequence_ids": processor.data.index.tolist()[:20],
+                    "sequence_ids": list(table_df.index[:20]),
                     "sample_positions": sample_positions,
                     "sample_coverage": coverage_stats,
-                    "avg_coverage": round(
-                        processor.data.apply(lambda row: (row != '-').sum() / len(row), axis=1).mean(), 3
-                    )
+                    "avg_coverage": avg_coverage
                 })
                 
             except Exception as e:
@@ -213,38 +217,51 @@ class GRNAnalysisTools(BaseTool):
                 
                 # Get GRN processor
                 processor = self.get_processor("grn")
-                
-                # Load table
-                processor.load_grn_table(table_name)
-                original_positions = len(processor.data.columns)
-                
-                # Apply interval
-                processor.apply_interval(grn_positions)
-                filtered_positions = len(processor.data.columns)
-                
+
+                # Load table using correct method
+                table_df = processor.load_table(table_name)
+                if table_df is None or table_df.empty:
+                    return self.format_error(
+                        f"GRN table '{table_name}' not found or empty",
+                        "Check that the table exists using list_grn_tables"
+                    )
+
+                original_positions = len(table_df.columns)
+
+                # Filter to keep only specified GRN positions
+                valid_positions = [pos for pos in grn_positions if pos in table_df.columns]
+                if not valid_positions:
+                    return self.format_error(
+                        "None of the specified GRN positions exist in the table",
+                        f"Available positions: {list(table_df.columns[:20])}..."
+                    )
+
+                filtered_df = table_df[valid_positions]
+                filtered_positions = len(filtered_df.columns)
+
                 # Save if requested
                 if save_as:
-                    processor.save_grn_table(save_as)
-                
-                # Get coverage after filtering
+                    processor.record_table(save_as, filtered_df)
+
+                # Get coverage after filtering (limit to first 10 for efficiency)
                 coverage_stats = {}
-                for seq_id in processor.data.index[:10]:
-                    row = processor.data.loc[seq_id]
+                for seq_id in filtered_df.index[:10]:
+                    row = filtered_df.loc[seq_id]
                     assigned = (row != '-').sum()
                     coverage_stats[seq_id] = round(assigned / filtered_positions, 3) if filtered_positions > 0 else 0
-                
+
                 result = {
                     "original_table": table_name,
                     "original_positions": original_positions,
                     "filtered_positions": filtered_positions,
-                    "positions_kept": list(processor.data.columns),
+                    "positions_kept": list(filtered_df.columns[:50]),  # Limit output
                     "positions_removed": original_positions - filtered_positions,
                     "sample_coverage": coverage_stats
                 }
-                
+
                 if save_as:
                     result["saved_as"] = save_as
-                
+
                 return self.format_success(result)
                 
             except Exception as e:
@@ -273,63 +290,62 @@ class GRNAnalysisTools(BaseTool):
                 
                 # Get GRN processor
                 processor = self.get_processor("grn")
-                
-                # Load table
-                processor.load_grn_table(table_name)
-                
-                if processor.data.empty:
+
+                # Load table using correct method
+                table_df = processor.load_table(table_name)
+
+                if table_df is None or table_df.empty:
                     return self.format_error(
-                        f"GRN table '{table_name}' is empty",
+                        f"GRN table '{table_name}' is empty or not found",
                         "Cannot calculate statistics for empty table"
                     )
-                
+
                 # Basic stats
-                num_sequences = len(processor.data)
-                num_positions = len(processor.data.columns)
-                
+                num_sequences = len(table_df)
+                num_positions = len(table_df.columns)
+
                 # Coverage by sequence
-                sequence_coverage = processor.data.apply(
-                    lambda row: (row != '-').sum() / len(row), axis=1
+                sequence_coverage = table_df.apply(
+                    lambda row: (row != '-').sum() / len(row) if len(row) > 0 else 0, axis=1
                 )
-                
+
                 # Coverage by position
-                position_coverage = processor.data.apply(
-                    lambda col: (col != '-').sum() / len(col), axis=0
+                position_coverage = table_df.apply(
+                    lambda col: (col != '-').sum() / len(col) if len(col) > 0 else 0, axis=0
                 )
                 
-                # Conservation analysis
+                # Conservation analysis (limit to prevent memory bloat)
+                import numpy as np
                 highly_conserved = []
                 variable_positions = []
                 missing_positions = []
-                
-                for pos in processor.data.columns:
-                    col = processor.data[pos]
+
+                for pos in table_df.columns:
+                    col = table_df[pos]
                     non_gap = col[col != '-']
-                    
+
                     if len(non_gap) == 0:
                         missing_positions.append(pos)
                     else:
                         # Calculate conservation
-                        most_common = non_gap.value_counts().iloc[0]
+                        value_counts = non_gap.value_counts()
+                        most_common = value_counts.iloc[0]
                         conservation = most_common / len(non_gap)
-                        
-                        if conservation >= 0.9:
+
+                        if conservation >= 0.9 and len(highly_conserved) < 50:
                             highly_conserved.append({
                                 "position": pos,
-                                "residue": non_gap.value_counts().index[0],
+                                "residue": value_counts.index[0],
                                 "conservation": round(conservation, 3)
                             })
-                        elif conservation <= 0.5:
+                        elif conservation <= 0.5 and len(variable_positions) < 50:
                             variable_positions.append({
                                 "position": pos,
                                 "entropy": round(-sum(
-                                    (count/len(non_gap)) * np.log2(count/len(non_gap)) 
-                                    for count in non_gap.value_counts()
+                                    (count/len(non_gap)) * np.log2(count/len(non_gap))
+                                    for count in value_counts
                                 ), 3)
                             })
-                
-                # Import numpy for entropy calculation
-                import numpy as np
                 
                 return self.format_success({
                     "table_name": table_name,
@@ -388,44 +404,47 @@ class GRNAnalysisTools(BaseTool):
                 
                 # Get GRN processor
                 processor = self.get_processor("grn")
-                
-                # Load table
-                processor.load_grn_table(table_name)
-                
-                # Create or update row
+
+                # Load table using correct method
                 import pandas as pd
-                
+                table_df = processor.load_table(table_name)
+                if table_df is None:
+                    table_df = pd.DataFrame()
+
+                # Track whether this is a new or updated entry
+                is_update = sequence_id in table_df.index
+
                 # If sequence exists, get current data
-                if sequence_id in processor.data.index:
-                    current_row = processor.data.loc[sequence_id].to_dict()
+                if is_update:
+                    current_row = table_df.loc[sequence_id].to_dict()
                 else:
-                    # Initialize with gaps
-                    current_row = {col: '-' for col in processor.data.columns}
-                
+                    # Initialize with gaps for all columns
+                    current_row = {col: '-' for col in table_df.columns}
+
                 # Update with new positions
                 positions_updated = 0
                 new_positions = []
-                
+
                 for grn_pos, residue in grn_positions.items():
-                    if grn_pos in processor.data.columns:
+                    if grn_pos in table_df.columns:
                         current_row[grn_pos] = residue
                         positions_updated += 1
                     else:
                         new_positions.append(grn_pos)
-                
-                # Convert to Series and save
+
+                # Convert to Series and update the table
                 row_data = pd.Series(current_row, name=sequence_id)
-                processor.save_entity(sequence_id, row_data)
-                
-                # Save the updated table
-                processor.save_grn_table(table_name)
-                
+                table_df.loc[sequence_id] = row_data
+
+                # Save the updated table using record_table
+                processor.record_table(table_name, table_df)
+
                 result = {
                     "table_name": table_name,
                     "sequence_id": sequence_id,
                     "positions_updated": positions_updated,
                     "total_positions": len(grn_positions),
-                    "status": "updated" if sequence_id in processor.data.index else "created"
+                    "status": "updated" if is_update else "created"
                 }
                 
                 if new_positions:
@@ -835,50 +854,52 @@ class GRNAnalysisTools(BaseTool):
                 
                 # Get GRN processor
                 processor = self.get_processor("grn")
-                
-                # Load GRN table
+
+                # Load GRN table using correct method
                 try:
-                    processor.load_grn_table(grn_table)
+                    table_df = processor.load_table(grn_table)
+                    if table_df is None or table_df.empty:
+                        return self.format_error(
+                            f"GRN table '{grn_table}' not found or empty",
+                            "Check that the GRN table exists"
+                        )
                 except Exception as e:
                     return self.format_error(
                         f"Failed to load GRN table: {str(e)}",
                         "Check that the GRN table exists"
                     )
-                
-                # Extract GRN data for entities
-                grn_annotations = {}
+
+                # Count found/missing entities - don't return full annotation data
+                found_entities = []
                 missing_entities = []
-                
+                coverage_summary = {}
+
                 for entity in entity_list:
-                    if entity in processor.data.index:
-                        entity_grn = processor.data.loc[entity]
-                        
-                        if positions:
-                            # Filter to specific positions
-                            filtered_grn = {}
-                            for pos in positions:
-                                if pos in entity_grn.index:
-                                    filtered_grn[pos] = entity_grn[pos]
-                            grn_annotations[entity] = filtered_grn
-                        else:
-                            # All positions
-                            grn_annotations[entity] = entity_grn.to_dict()
+                    if entity in table_df.index:
+                        found_entities.append(entity)
+                        # Calculate coverage for this entity
+                        row = table_df.loc[entity]
+                        assigned = (row != '-').sum()
+                        total = len(row)
+                        coverage_summary[entity] = round(assigned / total, 3) if total > 0 else 0
                     else:
                         missing_entities.append(entity)
-                
+
                 result = {
                     "grn_table": grn_table,
                     "num_queried": len(entity_list),
-                    "num_found": len(grn_annotations),
-                    "annotations": grn_annotations
+                    "num_found": len(found_entities),
+                    "found_entities": found_entities[:20],  # Limit list
+                    "coverage_summary": coverage_summary,
+                    "note": "GRN annotations available in Protos context. Use processor methods for full data.",
                 }
-                
+
                 if positions:
-                    result["positions_requested"] = positions
-                
+                    result["positions_requested"] = positions[:20]
+
                 if missing_entities:
-                    result["missing_entities"] = missing_entities
-                
+                    result["missing_entities"] = missing_entities[:20]
+
                 return self.format_success(result)
                 
             except Exception as e:
@@ -1134,14 +1155,25 @@ class GRNAnalysisTools(BaseTool):
                     if query_id not in best_matches or result['sequence_identity'] > best_matches[query_id]['sequence_identity']:
                         best_matches[query_id] = result
                 
-                return self.format_success({
+                result = {
                     "num_queries": len(query_sequences),
                     "num_alignments": len(alignment_results),
                     "num_filtered": len([r for r in alignment_results if r['sequence_identity'] >= min_identity]),
-                    "best_matches": best_matches,
                     "alignment_method": alignment_method,
-                    "min_identity": min_identity
-                })
+                    "min_identity": min_identity,
+                }
+
+                # In LLM-safe mode, limit the number of best matches returned
+                if self.llm_safe_mode:
+                    max_matches = min(10, len(best_matches))
+                    limited_matches = dict(list(best_matches.items())[:max_matches])
+                    result["best_matches"] = limited_matches
+                    if len(best_matches) > max_matches:
+                        result["matches_note"] = f"Showing {max_matches} of {len(best_matches)} best matches"
+                else:
+                    result["best_matches"] = best_matches
+
+                return self.format_success(result)
                 
             except Exception as e:
                 return self.handle_error(e)
@@ -1407,7 +1439,217 @@ class GRNAnalysisTools(BaseTool):
                     "regions": formatted_config,
                     "num_regions": len(formatted_config)
                 })
-                
+
             except Exception as e:
                 return self.handle_error(e)
-        
+
+        @server.tool()
+        def grn_query_entity(ctx, grn_table: str,
+                           entity_id: str,
+                           positions: Optional[List[str]] = None) -> Dict:
+            """
+            Get GRN annotations for a specific entity from a GRN table.
+
+            Use this tool to inspect the GRN annotation of a single entity/sequence.
+            Optionally filter to specific GRN positions of interest.
+
+            Args:
+                grn_table: Name of the GRN table
+                entity_id: ID of the entity to query
+                positions: Optional list of specific GRN positions to retrieve
+                          (e.g., ["1.50", "2.50", "3.50"])
+
+            Returns:
+                Dictionary with entity's GRN annotations
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"grn_table": grn_table, "entity_id": entity_id},
+                    ["grn_table", "entity_id"]
+                ):
+                    return error
+
+                processor = self.get_processor("grn")
+
+                try:
+                    table_df = processor.load_table(grn_table)
+                    if table_df is None or table_df.empty:
+                        return self.format_error(
+                            f"GRN table '{grn_table}' not found or empty",
+                            "Check available tables using list_grn_tables"
+                        )
+                except Exception as e:
+                    return self.format_error(
+                        f"Failed to load GRN table: {str(e)}",
+                        "Check that the table exists"
+                    )
+
+                if entity_id not in table_df.index:
+                    # Try partial match
+                    matches = [idx for idx in table_df.index if entity_id.lower() in idx.lower()]
+                    if matches:
+                        return self.format_error(
+                            f"Entity '{entity_id}' not found in table",
+                            f"Did you mean one of: {matches[:5]}"
+                        )
+                    return self.format_error(
+                        f"Entity '{entity_id}' not found in table",
+                        f"Available entities: {list(table_df.index[:10])}..."
+                    )
+
+                row = table_df.loc[entity_id]
+
+                # Filter to specific positions if requested
+                if positions:
+                    valid_positions = [p for p in positions if p in row.index]
+                    invalid_positions = [p for p in positions if p not in row.index]
+                    row = row[valid_positions]
+                else:
+                    valid_positions = list(row.index)
+                    invalid_positions = []
+
+                # Convert to dict, filtering out gaps for cleaner output
+                annotations = {}
+                gap_count = 0
+                for pos, residue in row.items():
+                    if residue != '-' and residue != '' and residue is not None:
+                        annotations[pos] = residue
+                    else:
+                        gap_count += 1
+
+                result = {
+                    "grn_table": grn_table,
+                    "entity_id": entity_id,
+                    "total_positions": len(valid_positions),
+                    "assigned_positions": len(annotations),
+                    "gap_positions": gap_count,
+                    "coverage": round(len(annotations) / len(valid_positions), 3) if valid_positions else 0,
+                    "annotations": annotations,
+                }
+
+                if invalid_positions:
+                    result["invalid_positions"] = invalid_positions
+
+                return self.format_success(result)
+
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def grn_query_position(ctx, grn_table: str,
+                             positions: List[str],
+                             include_entity_details: bool = False) -> Dict:
+            """
+            Get amino acid distribution at specific GRN positions.
+
+            Use this tool to analyze conservation or variation at specific GRN positions
+            across all entities in a GRN table.
+
+            Args:
+                grn_table: Name of the GRN table
+                positions: List of GRN positions to analyze (e.g., ["1.50", "2.50"])
+                include_entity_details: If True, include per-entity residues (limited)
+
+            Returns:
+                Dictionary with AA distribution for each position
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"grn_table": grn_table, "positions": positions},
+                    ["grn_table", "positions"]
+                ):
+                    return error
+
+                if not positions:
+                    return self.format_error(
+                        "No positions provided",
+                        "Provide at least one GRN position to query"
+                    )
+
+                processor = self.get_processor("grn")
+
+                try:
+                    table_df = processor.load_table(grn_table)
+                    if table_df is None or table_df.empty:
+                        return self.format_error(
+                            f"GRN table '{grn_table}' not found or empty",
+                            "Check available tables using list_grn_tables"
+                        )
+                except Exception as e:
+                    return self.format_error(
+                        f"Failed to load GRN table: {str(e)}",
+                        "Check that the table exists"
+                    )
+
+                position_stats: Dict[str, Any] = {}
+                invalid_positions = []
+
+                for pos in positions:
+                    if pos not in table_df.columns:
+                        invalid_positions.append(pos)
+                        continue
+
+                    col = table_df[pos]
+
+                    # Count amino acids (excluding gaps)
+                    aa_counts = col.value_counts()
+                    non_gap_counts = aa_counts[~aa_counts.index.isin(['-', '', None])]
+                    gap_count = aa_counts.get('-', 0) + aa_counts.get('', 0)
+
+                    total_entities = len(col)
+                    assigned_count = total_entities - gap_count
+
+                    # Calculate conservation
+                    if len(non_gap_counts) > 0:
+                        most_common_aa = non_gap_counts.index[0]
+                        most_common_count = non_gap_counts.iloc[0]
+                        conservation = most_common_count / assigned_count if assigned_count > 0 else 0
+                    else:
+                        most_common_aa = None
+                        conservation = 0
+
+                    pos_data = {
+                        "total_entities": total_entities,
+                        "assigned_count": int(assigned_count),
+                        "gap_count": int(gap_count),
+                        "coverage": round(assigned_count / total_entities, 3) if total_entities > 0 else 0,
+                        "most_common_aa": most_common_aa,
+                        "conservation": round(conservation, 3),
+                        "aa_distribution": non_gap_counts.to_dict(),
+                    }
+
+                    # Optionally include per-entity details (limited)
+                    if include_entity_details:
+                        # Only include first 20 entities with non-gap residues
+                        entity_residues = {}
+                        count = 0
+                        for entity_id, residue in col.items():
+                            if residue != '-' and residue != '' and residue is not None:
+                                entity_residues[entity_id] = residue
+                                count += 1
+                                if count >= 20:
+                                    break
+                        pos_data["entity_residues"] = entity_residues
+                        if assigned_count > 20:
+                            pos_data["entity_residues_note"] = f"Showing 20 of {int(assigned_count)} entities"
+
+                    position_stats[pos] = pos_data
+
+                result = {
+                    "grn_table": grn_table,
+                    "positions_queried": len(positions),
+                    "positions_found": len(position_stats),
+                    "position_stats": position_stats,
+                }
+
+                if invalid_positions:
+                    result["invalid_positions"] = invalid_positions
+                    # Suggest similar positions
+                    available = list(table_df.columns[:20])
+                    result["available_positions_sample"] = available
+
+                return self.format_success(result)
+
+            except Exception as e:
+                return self.handle_error(e)
+

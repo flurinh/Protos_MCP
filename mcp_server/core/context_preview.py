@@ -36,7 +36,7 @@ class PreviewLimits(BaseModel):
     max_rows: int = Field(default=DEFAULT_MAX_ROWS, ge=1)
     max_columns: int = Field(default=DEFAULT_MAX_COLUMNS, ge=1)
     max_items: int = Field(default=DEFAULT_MAX_ITEMS, ge=1)
-    max_chars: int = Field(default=DEFAULT_MAX_CHARS, ge=200)
+    max_chars: int = Field(default=DEFAULT_MAX_CHARS, ge=50)  # Allow shorter for LLM-safe mode
     max_bytes: int = Field(default=DEFAULT_MAX_BYTES, ge=1024)
 
     def override(self, **kwargs: int) -> "PreviewLimits":

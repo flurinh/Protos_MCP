@@ -153,28 +153,32 @@ async def run_workflow() -> Dict[str, Any]:
         if not registered_entities:
             raise RuntimeError("No chain sequences were registered; cannot proceed with GRN annotation")
 
-        sequence_payloads: Dict[str, str] = {}
+        # Get sequence lengths from metadata (sequences stay in Protos context)
         sequence_lengths: Dict[str, int] = {}
         for seq_id in registered_entities:
-            seq_resp = await call("load_sequence", sequence_id=seq_id, include_sequence=True)
+            seq_resp = await call("load_sequence", sequence_id=seq_id, include_sequence=False)
             seq_data = seq_resp.get("data", {}) if isinstance(seq_resp, dict) else {}
-            sequence = seq_data.get("sequence")
-            if sequence is None and isinstance(seq_data.get("full_sequences"), dict):
-                sequence = next(iter(seq_data["full_sequences"].values()), None)
-            if sequence:
-                sequence_payloads[seq_id] = sequence
-                sequence_lengths[seq_id] = len(sequence)
+            # Get length from response metadata
+            length = seq_data.get("length")
+            if length is None:
+                # Try preview_summary fallback
+                preview_summary = seq_data.get("preview_summary", {})
+                summary = preview_summary.get("summary", {})
+                length = summary.get("length")
+            if length:
+                sequence_lengths[seq_id] = int(length)
 
         reference_sequence_id = REFERENCE_SEQUENCE if REFERENCE_SEQUENCE in registered_entities else registered_entities[0]
-        if reference_sequence_id not in sequence_payloads:
-            ref_resp = await call("load_sequence", sequence_id=reference_sequence_id, include_sequence=True)
+        # Ensure reference sequence length is available
+        if reference_sequence_id not in sequence_lengths:
+            ref_resp = await call("load_sequence", sequence_id=reference_sequence_id, include_sequence=False)
             ref_data = ref_resp.get("data", {}) if isinstance(ref_resp, dict) else {}
-            ref_sequence = ref_data.get("sequence")
-            if ref_sequence is None and isinstance(ref_data.get("full_sequences"), dict):
-                ref_sequence = next(iter(ref_data["full_sequences"].values()), None)
-            if ref_sequence:
-                sequence_payloads[reference_sequence_id] = ref_sequence
-                sequence_lengths[reference_sequence_id] = len(ref_sequence)
+            length = ref_data.get("length")
+            if length is None:
+                preview_summary = ref_data.get("preview_summary", {})
+                length = preview_summary.get("summary", {}).get("length")
+            if length:
+                sequence_lengths[reference_sequence_id] = int(length)
 
         alignment_metrics: Dict[str, Dict[str, Any]] = {}
         filtered_sequences: List[str] = []
@@ -182,7 +186,8 @@ async def run_workflow() -> Dict[str, Any]:
             align_resp = await call("align_sequences_by_id", entity1=seq_id, entity2=reference_sequence_id, alignment_method="blosum62")
             align_data = align_resp.get("data", align_resp) if isinstance(align_resp, dict) else {}
             score = align_data.get("score")
-            length = sequence_lengths.get(seq_id, len(sequence_payloads.get(seq_id, "")))
+            # Use length from sequence metadata or alignment response
+            length = sequence_lengths.get(seq_id) or align_data.get("length") or 0
             normalized = None
             if score is not None and length:
                 normalized = float(score) / max(float(length), 1.0)

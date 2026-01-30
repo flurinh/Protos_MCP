@@ -103,21 +103,15 @@ class SequenceAnalysisTools(BaseTool):
                 if isinstance(entity, str):
                     payload["length"] = preview["summary"].get("length")
                     payload["preview"] = preview.get("preview")
-                    if include_sequence and len(entity) <= limits.max_chars:
+                    # Explicit include_sequence=True request is honored
+                    if include_sequence:
                         payload["sequence"] = entity
-                    elif include_sequence:
-                        payload["sequence_warning"] = (
-                            "Sequence exceeds preview limit; use download_entity for full data."
-                        )
                 elif isinstance(entity, dict):
                     payload["sequence_count"] = preview["summary"].get("sequence_count")
                     payload["sequences"] = preview.get("preview")
-                    if include_sequence and len(entity) <= limits.max_items:
+                    # Explicit include_sequence=True request is honored
+                    if include_sequence:
                         payload["full_sequences"] = entity
-                    elif include_sequence:
-                        payload["sequence_warning"] = (
-                            "Dataset too large to inline; request specific IDs or download the dataset."
-                        )
                 else:
                     payload["data"] = preview.get("preview")
 
@@ -169,7 +163,7 @@ class SequenceAnalysisTools(BaseTool):
                     )
 
                 limits = SEQUENCE_PREVIEW_LIMITS.override(
-                    max_chars=min(preview_length, SEQUENCE_PREVIEW_LIMITS.max_chars),
+                    max_chars=max(200, min(preview_length, SEQUENCE_PREVIEW_LIMITS.max_chars)),
                     max_items=min(max_sequences, SEQUENCE_PREVIEW_LIMITS.max_items),
                 )
 
@@ -180,21 +174,34 @@ class SequenceAnalysisTools(BaseTool):
                     label=dataset_name,
                 ).export()
 
+                # Return metadata and entity IDs
                 payload: Dict[str, Any] = {
                     "dataset_name": dataset_name,
                     "sequence_count": len(dataset),
                     "metadata": info.get("metadata", {}),
-                    "entities": summary,
-                    "truncated": len(dataset) > len(summary),
-                    "preview_summary": preview,
+                    "entity_ids": list(dataset.keys())[:max_sequences],
+                    "truncated": len(dataset) > max_sequences,
                 }
 
-                if include_sequences and len(dataset) <= limits.max_items:
-                    payload["sequences"] = dataset
-                elif include_sequences:
-                    payload["sequence_warning"] = (
-                        "Dataset exceeds inline limits; export or filter sequences instead."
-                    )
+                # Include basic stats
+                if dataset:
+                    lengths = [len(v) for v in dataset.values() if isinstance(v, str)]
+                    if lengths:
+                        payload["length_stats"] = {
+                            "min": min(lengths),
+                            "max": max(lengths),
+                            "avg": round(sum(lengths) / len(lengths), 1),
+                        }
+
+                # If include_sequences explicitly requested, honor it
+                # Explicit request = user/workflow needs the data
+                if include_sequences:
+                    payload["sequences"] = {
+                        k: v for k, v in list(dataset.items())[:max_sequences]
+                        if isinstance(v, str)
+                    }
+                else:
+                    payload["note"] = "Sequences available in Protos context. Use include_sequences=True to retrieve."
 
                 return self.format_success(payload)
             except Exception as exc:  # noqa: BLE001
@@ -355,26 +362,21 @@ class SequenceAnalysisTools(BaseTool):
                 aligner = init_aligner()
 
                 if alignment_method == "blosum62":
+                    # Note: align_blosum62 doesn't accept gap penalty parameters
                     alignment = align_blosum62(
                         sequence1,
                         sequence2,
                         aligner,
-                        gap_open=gap_open,
-                        gap_extend=gap_extend,
                     )
                 else:
                     # Use generic alignment
-                    alignment = aligner.align(
-                        sequence1, sequence2, gap_open=gap_open, gap_extend=gap_extend
-                    )[0][0]
+                    alignment = aligner.align(sequence1, sequence2)[0][0]
 
-                # Format alignment
+                # Format alignment - returns [target, midline, query]
                 formatted = format_alignment(alignment)
+                aligned_seq1, midline, aligned_seq2 = formatted
 
                 # Calculate statistics
-                aligned_seq1 = str(alignment.seqA)
-                aligned_seq2 = str(alignment.seqB)
-
                 matches = sum(
                     1 for a, b in zip(aligned_seq1, aligned_seq2) if a == b and a != "-"
                 )
@@ -391,18 +393,22 @@ class SequenceAnalysisTools(BaseTool):
                 gaps_seq1 = aligned_seq1.count("-")
                 gaps_seq2 = aligned_seq2.count("-")
 
-                return self.format_success(
-                    {
-                        "alignment": formatted,
-                        "score": float(alignment.score),
-                        "identity": round(identity, 3),
-                        "matches": matches,
-                        "length": length,
-                        "gaps_seq1": gaps_seq1,
-                        "gaps_seq2": gaps_seq2,
-                        "method": alignment_method,
-                    }
-                )
+                # In LLM-safe mode, don't return full alignment strings
+                alignment_response: Dict[str, Any] = {
+                    "score": float(alignment.score),
+                    "identity": round(identity, 3),
+                    "matches": matches,
+                    "length": length,
+                    "gaps_seq1": gaps_seq1,
+                    "gaps_seq2": gaps_seq2,
+                    "method": alignment_method,
+                }
+
+                # Only include alignment text if not in LLM-safe mode
+                if not self.llm_safe_mode:
+                    alignment_response["alignment"] = formatted
+
+                return self.format_success(alignment_response)
 
             except Exception as e:
                 return self.handle_error(e)
@@ -414,6 +420,7 @@ class SequenceAnalysisTools(BaseTool):
             entity2: str,
             alignment_method: str = "blosum62",
             store_alignment: bool = True,
+            include_alignment: bool = False,
         ) -> Dict:
             """
             Perform pairwise sequence alignment using entity identifiers.
@@ -426,9 +433,11 @@ class SequenceAnalysisTools(BaseTool):
                 entity2: Entity identifier for second sequence.
                 alignment_method: Currently only ``"blosum62"`` is supported.
                 store_alignment: If True, persist the alignment via SequenceProcessor.
+                include_alignment: If True, include full aligned sequences in response.
+                    Defaults to False to minimize context usage.
 
             Returns:
-                Dictionary with alignment results.
+                Dictionary with alignment results (score, identity, gaps, etc.).
             """
             try:
                 # Validate parameters
@@ -496,20 +505,25 @@ class SequenceAnalysisTools(BaseTool):
                 )
                 identity = matches / length if length else 0.0
 
-                return self.format_success(
-                    {
-                        "entity1": entity1,
-                        "entity2": entity2,
-                        "alignment": formatted,
-                        "score": float(score),
-                        "identity": round(identity, 3),
-                        "matches": matches,
-                        "length": length,
-                        "gaps_seq1": aligned_seq1.count("-"),
-                        "gaps_seq2": aligned_seq2.count("-"),
-                        "method": "blosum62",
-                    }
-                )
+                result = {
+                    "entity1": entity1,
+                    "entity2": entity2,
+                    "score": float(score),
+                    "identity": round(identity, 3),
+                    "matches": matches,
+                    "length": length,
+                    "gaps_seq1": aligned_seq1.count("-"),
+                    "gaps_seq2": aligned_seq2.count("-"),
+                    "method": "blosum62",
+                    "stored": store_alignment,
+                }
+                # Only include full alignment if explicitly requested
+                if include_alignment:
+                    result["alignment"] = formatted
+                else:
+                    result["note"] = "Alignment stored in Protos context. Use include_alignment=True for full data."
+
+                return self.format_success(result)
 
             except Exception as e:
                 return self.handle_error(e)
@@ -677,14 +691,28 @@ class SequenceAnalysisTools(BaseTool):
                     mmseqs_output, "columns"
                 ):
                     records = mmseqs_output.to_dict(orient="records")  # type: ignore[assignment]
-                    payload.update(
-                        {
-                            "result_type": "table",
-                            "columns": list(getattr(mmseqs_output, "columns", [])),
-                            "rows": records,
-                            "row_count": len(records),
-                        }
-                    )
+                    # In LLM-safe mode, limit the number of rows returned
+                    if self.llm_safe_mode:
+                        max_rows = 20
+                        payload.update(
+                            {
+                                "result_type": "table",
+                                "columns": list(getattr(mmseqs_output, "columns", [])),
+                                "rows": records[:max_rows],
+                                "row_count": len(records),
+                                "rows_shown": min(max_rows, len(records)),
+                                "truncated": len(records) > max_rows,
+                            }
+                        )
+                    else:
+                        payload.update(
+                            {
+                                "result_type": "table",
+                                "columns": list(getattr(mmseqs_output, "columns", [])),
+                                "rows": records,
+                                "row_count": len(records),
+                            }
+                        )
                 else:
                     lines = list(mmseqs_output)
                     payload.update(
@@ -898,14 +926,35 @@ class SequenceAnalysisTools(BaseTool):
                     return_summary=True,
                 )
 
-                annotation_rows = annotations.reset_index().to_dict(orient="records")
+                # Build statistics for LLM-safe response
+                grn_columns = [c for c in annotations.columns if c not in ["sequence", "entity_name"]]
+                sequence_count = len(annotations)
+
+                # Count non-empty values per GRN position
+                grn_coverage: Dict[str, int] = {}
+                for col in grn_columns:
+                    if col in annotations.columns:
+                        non_empty = annotations[col].notna() & (annotations[col] != "-") & (annotations[col] != "")
+                        grn_coverage[col] = int(non_empty.sum())
+
+                # Get AA distribution summary (top 3 AAs per position for first 10 positions)
+                aa_distribution_preview: Dict[str, Dict[str, int]] = {}
+                for col in grn_columns[:10]:  # Preview first 10 GRN positions
+                    if col in annotations.columns:
+                        counts = annotations[col].value_counts()
+                        # Filter out gaps/empty
+                        counts = counts[~counts.index.isin(["-", "", None])]
+                        aa_distribution_preview[col] = counts.head(3).to_dict()
 
                 payload: Dict[str, Any] = {
                     "reference_table": reference_table,
                     "protein_family": protein_family,
-                    "annotations": annotation_rows,
-                    "columns": list(annotations.columns),
-                    "sequence_count": len(annotations),
+                    "sequence_count": sequence_count,
+                    "grn_position_count": len(grn_columns),
+                    "grn_positions": grn_columns[:50] if len(grn_columns) > 50 else grn_columns,
+                    "grn_positions_truncated": len(grn_columns) > 50,
+                    "grn_coverage": grn_coverage,
+                    "aa_distribution_preview": aa_distribution_preview,
                     "summary": summary,
                 }
 
@@ -915,6 +964,15 @@ class SequenceAnalysisTools(BaseTool):
                     payload["entity_names"] = entity_names
                 if output_table:
                     payload["output_table"] = output_table
+                    payload["note"] = (
+                        "Full GRN annotations saved to table. Use grn_query_entity or "
+                        "grn_query_position to inspect specific data."
+                    )
+                else:
+                    payload["note"] = (
+                        "GRN annotations computed but not saved. Use grn_query_entity or "
+                        "grn_query_position to inspect, or provide output_table to persist."
+                    )
 
                 return self.format_success(payload)
 
@@ -2287,6 +2345,7 @@ class SequenceAnalysisTools(BaseTool):
                     result_name=result_name,
                 )
 
+                # Return summary stats only - full data stays in Protos context
                 summary = {
                     "positions": int(len(df)),
                     "top_conserved": df.nsmallest(5, "entropy").to_dict(
@@ -2295,10 +2354,10 @@ class SequenceAnalysisTools(BaseTool):
                     "most_variable": df.nlargest(5, "entropy").to_dict(
                         orient="records"
                     ),
+                    "avg_entropy": round(float(df["entropy"].mean()), 4) if "entropy" in df else None,
+                    "stored": store_result,
+                    "note": "Full table available in Protos context via processor." if not store_result else None,
                 }
-
-                if not store_result:
-                    summary["full_table"] = df.to_dict(orient="records")
 
                 if store_in_context:
                     artifact_name = (
@@ -2364,9 +2423,13 @@ class SequenceAnalysisTools(BaseTool):
                     result_name=result_name,
                 )
 
+                # Return summary + top pairs only - full data stays in Protos context
+                top_pairs = df.nlargest(10, df.columns[-1]).to_dict(orient="records") if len(df) > 0 else []
                 payload = {
                     "pair_count": int(len(df)),
-                    "pairs": df.to_dict(orient="records"),
+                    "top_pairs": top_pairs,
+                    "stored": store_result,
+                    "note": "Full linkage data available in Protos context via processor.",
                 }
 
                 if store_in_context:

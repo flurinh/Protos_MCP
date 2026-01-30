@@ -116,24 +116,28 @@ async def run_workflow() -> Dict[str, Any]:
             metadata={"source": "tools_grn_workflow"},
         )
 
+        # Load dataset metadata - sequences stay in Protos context
         dataset_load = await call(
             "load_sequence_dataset",
             dataset_name="gpcr_seqs",
-            include_sequences=True,
         )
 
-        sequences = dataset_load.get("data", {}).get("sequences", {})
-        if TARGET_REFERENCE not in sequences:
-            raise RuntimeError(f"Reference sequence {TARGET_REFERENCE} not present")
+        # Get entity IDs from dataset (not full sequences)
+        entity_ids = dataset_load.get("data", {}).get("entity_ids", [])
+        if TARGET_REFERENCE not in entity_ids:
+            raise RuntimeError(f"Reference sequence {TARGET_REFERENCE} not in dataset")
 
-        reference_sequence = sequences[TARGET_REFERENCE]
-
+        # Use entity-based matching - Protos loads sequences internally
         classifications: Dict[str, Dict[str, Any]] = {}
-        for seq_id, sequence in sequences.items():
+        length_stats = dataset_load.get("data", {}).get("length_stats", {})
+        avg_length = length_stats.get("avg", 300)  # Default estimate
+
+        for seq_id in entity_ids:
+            # Use entity IDs - Protos handles sequence loading internally
             match_resp = await call(
                 "sequence_find_best_match",
                 query_entity=seq_id,
-                reference_sequences={TARGET_REFERENCE: reference_sequence},
+                reference_ids=[TARGET_REFERENCE],  # Use entity ID list, not sequence content
                 use_mmseqs=True,
             )
 
@@ -145,7 +149,7 @@ async def run_workflow() -> Dict[str, Any]:
                 fallback = await call(
                     "sequence_find_best_match",
                     query_entity=seq_id,
-                    reference_sequences={TARGET_REFERENCE: reference_sequence},
+                    reference_ids=[TARGET_REFERENCE],
                     use_mmseqs=False,
                 )
                 match_data = fallback.get("data", fallback)
@@ -155,7 +159,8 @@ async def run_workflow() -> Dict[str, Any]:
             if score is None:
                 continue
 
-            normalized = score / max(len(sequence), 1)
+            # Use avg length for normalization since we don't have full sequences
+            normalized = score / max(avg_length, 1)
             classifications[seq_id] = {
                 "reference": best_match or TARGET_REFERENCE,
                 "raw_score": score,
@@ -200,15 +205,55 @@ async def run_workflow() -> Dict[str, Any]:
         }
 
 
-def main() -> None:
-    result = asyncio.run(run_workflow())
-
+def summarize(result: Dict[str, Any]) -> None:
+    """Memory-efficient summary of GRN workflow results."""
     print("GRN Workflow via MCP Tools")
     print("=" * 31)
 
-    for key, value in result.items():
-        print(f"\n--- {key} ---")
-        print(value)
+    # Data root
+    data_root = result.get("data_root", {}).get("data", {}).get("data_root", "N/A")
+    print(f"\nData root: {data_root}")
+
+    # Sequence registration
+    seq_reg = result.get("sequence_register", {}).get("data", {})
+    print(f"\nSequences registered: {seq_reg.get('registered_count', 'N/A')}")
+    print(f"  Dataset: {seq_reg.get('dataset_name', 'N/A')}")
+
+    # Similarity scores - just show count
+    scores = result.get("similarity_scores", {})
+    print(f"\nSimilarity classifications: {len(scores)} sequences")
+    for seq_id, info in list(scores.items())[:3]:
+        print(f"  - {seq_id}: score={info.get('normalized_score', 0):.4f}")
+
+    # GRN annotation summary
+    grn_ann = result.get("grn_annotation", {}).get("data", {})
+    print(f"\nGRN annotation:")
+    print(f"  Reference: {grn_ann.get('reference_table', 'N/A')}")
+    print(f"  Family: {grn_ann.get('protein_family', 'N/A')}")
+    print(f"  Sequences: {grn_ann.get('sequence_count', 0)}")
+
+    # GRN table - stats only
+    grn_table = result.get("grn_table", {}).get("data", {})
+    print(f"\nGRN table stats:")
+    print(f"  Sequences: {grn_table.get('num_sequences', 'N/A')}")
+    print(f"  Positions: {grn_table.get('num_positions', 'N/A')}")
+    print(f"  Avg coverage: {grn_table.get('avg_coverage', 'N/A')}")
+
+    # Reference info
+    ref_info = result.get("reference_info", {}).get("data", {})
+    print(f"\nReference table: {ref_info.get('reference_name', 'N/A')}")
+    print(f"  Sequences: {ref_info.get('num_sequences', 'N/A')}")
+    print(f"  Positions: {ref_info.get('num_positions', 'N/A')}")
+
+    # Target entity
+    entity = result.get("target_entity_annotations", {}).get("data", {})
+    if entity:
+        print(f"\nTarget entity annotations loaded: {bool(entity)}")
+
+
+def main() -> None:
+    result = asyncio.run(run_workflow())
+    summarize(result)
 
 
 if __name__ == "__main__":

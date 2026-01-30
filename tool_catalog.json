@@ -1,0 +1,5952 @@
+{
+  "tools": [
+    {
+      "name": "add_grn_annotation",
+      "group": "update",
+      "description": "\n            Add or update GRN annotation for a single sequence.\n            \n            Args:\n                table_name: Name of the GRN table\n                sequence_id: ID of the sequence to ann",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        },
+        {
+          "name": "sequence_id",
+          "type": "string"
+        },
+        {
+          "name": "grn_positions",
+          "type": "object"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "update",
+        "grn"
+      ]
+    },
+    {
+      "name": "add_property_column",
+      "group": "update",
+      "description": "\n            Add a new property column to an existing property table.\n            \n            Args:\n                dataset_name: Dataset to update\n                property_name: Name of the new prop",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "property_name",
+          "type": "string"
+        },
+        {
+          "name": "values",
+          "type": "any"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "update",
+        "property"
+      ]
+    },
+    {
+      "name": "align_protein_structures",
+      "group": "sequence",
+      "description": "\n            Align two protein structures using CEalign algorithm.\n            \n            This tool performs structural alignment of two proteins and returns\n            the transformation matrix an",
+      "parameters": [
+        {
+          "name": "reference_pdb",
+          "type": "string"
+        },
+        {
+          "name": "mobile_pdb",
+          "type": "string"
+        },
+        {
+          "name": "atom_selection",
+          "type": "string",
+          "optional": true,
+          "default": "CA"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "window_size",
+          "type": "integer",
+          "optional": true,
+          "default": 8
+        },
+        {
+          "name": "max_gap",
+          "type": "integer",
+          "optional": true,
+          "default": 30
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "align_sequences",
+      "group": "sequence",
+      "description": "\n            Perform pairwise sequence alignment using raw sequences.\n\n            Note: For entity-based alignment, use align_sequences_by_id instead.\n\n            Args:\n                sequence1: Fi",
+      "parameters": [
+        {
+          "name": "sequence1",
+          "type": "string"
+        },
+        {
+          "name": "sequence2",
+          "type": "string"
+        },
+        {
+          "name": "alignment_method",
+          "type": "string",
+          "optional": true,
+          "default": "blosum62"
+        },
+        {
+          "name": "gap_open",
+          "type": "integer",
+          "optional": true,
+          "default": -10
+        },
+        {
+          "name": "gap_extend",
+          "type": "integer",
+          "optional": true,
+          "default": -1
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "align_sequences_by_id",
+      "group": "sequence",
+      "description": "\n            Perform pairwise sequence alignment using entity identifiers.\n\n            This tool loads sequences from Protos storage rather than requiring\n            the full sequence strings as inp",
+      "parameters": [
+        {
+          "name": "entity1",
+          "type": "string"
+        },
+        {
+          "name": "entity2",
+          "type": "string"
+        },
+        {
+          "name": "alignment_method",
+          "type": "string",
+          "optional": true,
+          "default": "blosum62"
+        },
+        {
+          "name": "store_alignment",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "include_alignment",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "apply_grn_interval",
+      "group": "analysis",
+      "description": "\n            Filter a GRN table to include only specific GRN positions.\n            \n            This is useful for focusing on specific regions (e.g., only TM helices).\n            \n            Args:",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        },
+        {
+          "name": "grn_positions",
+          "type": "array"
+        },
+        {
+          "name": "save_as",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "grn"
+      ]
+    },
+    {
+      "name": "assign_grn_to_dataset",
+      "group": "grn",
+      "description": "\n            Assign GRN positions to all sequences in a dataset.\n            \n            This combines alignment and GRN assignment in one step, using\n            dataset names rather than requiring ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "reference_name",
+          "type": "string"
+        },
+        {
+          "name": "protein_family",
+          "type": "string",
+          "optional": true,
+          "default": "gpcr_a"
+        },
+        {
+          "name": "output_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn",
+        "dataset"
+      ]
+    },
+    {
+      "name": "assign_grn_to_sequences",
+      "group": "grn",
+      "description": "\n            Assign GRN positions to aligned sequences.\n            \n            Args:\n                sequence_alignments: Alignment results from grn_align_sequences_to_reference\n                refe",
+      "parameters": [
+        {
+          "name": "sequence_alignments",
+          "type": "object"
+        },
+        {
+          "name": "reference_name",
+          "type": "string"
+        },
+        {
+          "name": "protein_family",
+          "type": "string",
+          "optional": true,
+          "default": "gpcr_a"
+        },
+        {
+          "name": "expand_annotation",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn"
+      ]
+    },
+    {
+      "name": "calculate_sequence_identity",
+      "group": "analysis",
+      "description": "\n            Calculate pairwise sequence identities using raw sequences.\n\n            Note: For entity-based identity calculation, use sequence_calculate_identity_from_dataset instead.\n\n            Ar",
+      "parameters": [
+        {
+          "name": "sequences",
+          "type": "object"
+        },
+        {
+          "name": "reference_sequence",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "sequence"
+      ]
+    },
+    {
+      "name": "calculate_structure_properties",
+      "group": "analysis",
+      "description": "\n            Calculate basic structural properties.\n            \n            Args:\n                pdb_id: PDB identifier\n                chain_id: Optional specific chain\n                \n           ",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "structure"
+      ]
+    },
+    {
+      "name": "calculate_structure_rmsd_matrix",
+      "group": "analysis",
+      "description": "\n            Calculate RMSD matrix between multiple structures.\n\n            This tool performs pairwise structural alignments between multiple\n            proteins and returns an RMSD matrix. Can ope",
+      "parameters": [
+        {
+          "name": "pdb_ids",
+          "type": "array"
+        },
+        {
+          "name": "atom_selection",
+          "type": "string",
+          "optional": true,
+          "default": "CA"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "optional": true,
+          "default": "all_vs_all"
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "structure"
+      ]
+    },
+    {
+      "name": "cluster_dataset_sequences",
+      "group": "sequence",
+      "description": "\n            Cluster sequences in a dataset by similarity.\n\n            Args:\n                dataset_name: Name of the sequence dataset\n                similarity_threshold: Similarity threshold for ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "similarity_threshold",
+          "type": "number",
+          "optional": true,
+          "default": 0.8
+        },
+        {
+          "name": "method",
+          "type": "string",
+          "optional": true,
+          "default": "single"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "dataset"
+      ]
+    },
+    {
+      "name": "cluster_sequences",
+      "group": "sequence",
+      "description": "\n            Cluster sequences by similarity using raw sequences.\n\n            Note: For dataset-based clustering, use cluster_dataset_sequences instead.\n\n            Args:\n                sequences: ",
+      "parameters": [
+        {
+          "name": "sequences",
+          "type": "object"
+        },
+        {
+          "name": "identity_threshold",
+          "type": "number",
+          "optional": true,
+          "default": 0.9
+        },
+        {
+          "name": "method",
+          "type": "string",
+          "optional": true,
+          "default": "single"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "config_get_data_root",
+      "group": "config",
+      "description": "Report the currently configured Protos data root.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "config"
+      ]
+    },
+    {
+      "name": "config_initialize_data",
+      "group": "config",
+      "description": "Ensure the configured data root exists with the expected layout.",
+      "parameters": [
+        {
+          "name": "reinstall_reference",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "refresh_registry",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "config"
+      ]
+    },
+    {
+      "name": "config_reset_data",
+      "group": "config",
+      "description": "Reset the shared data directory and registry state.",
+      "parameters": [
+        {
+          "name": "wipe",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "reinstall_reference",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "backup_registry",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "config"
+      ]
+    },
+    {
+      "name": "config_set_data_root",
+      "group": "config",
+      "description": "Update the Protos data root before any processors are used.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "config"
+      ]
+    },
+    {
+      "name": "context_clear",
+      "group": "context",
+      "description": "Remove stored artifacts matching the provided filters.",
+      "parameters": [
+        {
+          "name": "handle",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "kind",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "processor_type",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "clear_all",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "clear"
+      ]
+    },
+    {
+      "name": "context_get",
+      "group": "context",
+      "description": "Fetch a stored artifact and optionally resolve underlying data.",
+      "parameters": [
+        {
+          "name": "handle",
+          "type": "str"
+        },
+        {
+          "name": "resolve",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "returns": {
+        "fields": [
+          "artifact",
+          "resolved"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "inspect"
+      ]
+    },
+    {
+      "name": "context_history",
+      "group": "context",
+      "description": "Return the recent context history events.",
+      "parameters": [
+        {
+          "name": "limit",
+          "type": "int",
+          "default": 25
+        }
+      ],
+      "returns": {
+        "fields": [
+          "events"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "history"
+      ]
+    },
+    {
+      "name": "context_list",
+      "group": "context",
+      "description": "List stored context artifacts filtered by kind/processor/tags.",
+      "parameters": [
+        {
+          "name": "kind",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "processor_type",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "tags",
+          "type": "list[str]",
+          "optional": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "count",
+          "artifacts"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "list"
+      ]
+    },
+    {
+      "name": "context_reset",
+      "group": "context",
+      "description": "Clear all recorded artifacts and history for the session.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "reset"
+      ]
+    },
+    {
+      "name": "context_set_active",
+      "group": "context",
+      "description": "Mark an artifact handle as active for a given scope.",
+      "parameters": [
+        {
+          "name": "handle",
+          "type": "str"
+        },
+        {
+          "name": "scope",
+          "type": "str",
+          "optional": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "scope",
+          "handle"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "active"
+      ]
+    },
+    {
+      "name": "context_status",
+      "group": "context",
+      "description": "Return a summary snapshot of the current session context.",
+      "parameters": [],
+      "returns": {
+        "type": "session_snapshot"
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "context",
+        "status"
+      ]
+    },
+    {
+      "name": "create_ligand_dataset_from_chembl",
+      "group": "create",
+      "description": "\n            Create a ligand dataset from ChEMBL bioactivity data.\n            \n            This tool downloads ligands for a protein target and creates\n            a dataset with their properties and",
+      "parameters": [
+        {
+          "name": "protein_id",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "activity_types",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "min_pchembl",
+          "type": "number",
+          "optional": true,
+          "default": 6.0
+        },
+        {
+          "name": "max_ligands",
+          "type": "integer",
+          "optional": true,
+          "default": 1000
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "create",
+        "dataset"
+      ]
+    },
+    {
+      "name": "create_property_table",
+      "group": "create",
+      "description": "\n            Create a new property table from entity data.\n            \n            Args:\n                dataset_name: Name for the property table/dataset\n                data: Either:\n              ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "data",
+          "type": "any"
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "create",
+        "property"
+      ]
+    },
+    {
+      "name": "dataset_copy",
+      "group": "dataset",
+      "description": "Copy a dataset to a new name using DatasetManager.copy_dataset.",
+      "parameters": [
+        {
+          "name": "source_name",
+          "type": "str"
+        },
+        {
+          "name": "target_name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "returns": {
+        "fields": [
+          "context_handle"
+        ]
+      },
+      "aliases": [
+        "copy_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "copy"
+      ],
+      "notes": "Legacy alias; prefer dataset_copy"
+    },
+    {
+      "name": "dataset_create",
+      "group": "dataset",
+      "description": "Create a dataset from registered entity names.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "entities",
+          "type": "list[str]"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "context_handle",
+          "metadata"
+        ]
+      },
+      "aliases": [
+        "create_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "create"
+      ],
+      "notes": "Legacy alias; prefer dataset_create"
+    },
+    {
+      "name": "dataset_delete",
+      "group": "dataset",
+      "description": "Delete a dataset definition from the registry.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {},
+      "aliases": [
+        "delete_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "delete"
+      ],
+      "notes": "Legacy alias; prefer dataset_delete"
+    },
+    {
+      "name": "dataset_entities",
+      "group": "dataset",
+      "description": "Return the entity names associated with a dataset.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "entities"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "inspect"
+      ]
+    },
+    {
+      "name": "dataset_export",
+      "group": "dataset",
+      "description": "Export a dataset using the processor's export_dataset helper.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        },
+        {
+          "name": "output_dir",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "format",
+          "type": "str",
+          "optional": true
+        }
+      ],
+      "returns": {},
+      "aliases": [
+        "export_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "export"
+      ],
+      "notes": "Legacy alias; prefer dataset_export"
+    },
+    {
+      "name": "dataset_info",
+      "group": "dataset",
+      "description": "Return metadata and current entity coverage for a dataset.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "metadata",
+          "context_handle"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "inspect"
+      ]
+    },
+    {
+      "name": "dataset_list",
+      "group": "dataset",
+      "description": "List datasets known to a processor.",
+      "parameters": [
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "datasets"
+        ]
+      },
+      "aliases": [
+        "list_datasets"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "list"
+      ],
+      "notes": "Legacy alias; prefer dataset_list"
+    },
+    {
+      "name": "dataset_load",
+      "group": "dataset",
+      "description": "Load dataset members via the processor for quick inspection.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        },
+        {
+          "name": "summary_only",
+          "type": "bool",
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [
+        "load_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "load"
+      ],
+      "notes": "Legacy alias; prefer dataset_load"
+    },
+    {
+      "name": "dataset_merge",
+      "group": "dataset",
+      "description": "Merge multiple datasets into a single dataset.",
+      "parameters": [
+        {
+          "name": "dataset_names",
+          "type": "list[str]"
+        },
+        {
+          "name": "target_name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "context_handle"
+        ]
+      },
+      "aliases": [
+        "merge_datasets"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "merge"
+      ],
+      "notes": "Legacy alias; prefer dataset_merge"
+    },
+    {
+      "name": "dataset_refresh_all",
+      "group": "dataset",
+      "description": "Refresh entity names for all datasets of a processor.",
+      "parameters": [
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "dataset_count",
+          "datasets"
+        ]
+      },
+      "aliases": [
+        "refresh_all_datasets"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "refresh"
+      ],
+      "notes": "Legacy alias; prefer dataset_refresh_all"
+    },
+    {
+      "name": "dataset_refresh_entities",
+      "group": "dataset",
+      "description": "Refresh entity names in a dataset via DatasetManager.refresh_dataset_entities.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "context_handle"
+        ]
+      },
+      "aliases": [
+        "refresh_dataset_entities"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "refresh"
+      ],
+      "notes": "Legacy alias; prefer dataset_refresh_entities"
+    },
+    {
+      "name": "dataset_update",
+      "group": "dataset",
+      "description": "Add/remove entities or metadata for an existing dataset.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str"
+        },
+        {
+          "name": "add_entities",
+          "type": "list[str]",
+          "optional": true
+        },
+        {
+          "name": "remove_entities",
+          "type": "list[str]",
+          "optional": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "context_handle"
+        ]
+      },
+      "aliases": [
+        "update_dataset"
+      ],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "update"
+      ],
+      "notes": "Legacy alias; prefer dataset_update"
+    },
+    {
+      "name": "delete_entity",
+      "group": "entity",
+      "description": "\n            Delete an entity from specified formats.\n\n            Args:\n                name: Entity name\n                formats: List of formats to delete from\n\n            Returns:\n               ",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "formats",
+          "type": "array"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity"
+      ]
+    },
+    {
+      "name": "delete_property_rows",
+      "group": "entity",
+      "description": "\n            Delete specific rows (entities) from a property table.\n\n            Args:\n                dataset_name: Name of the property table\n                entity_ids: List of entity IDs to delete",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "entity_ids",
+          "type": "array"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity",
+        "property"
+      ]
+    },
+    {
+      "name": "describe_model",
+      "group": "model",
+      "description": "Return full model card metadata for a specific model.",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model"
+      ]
+    },
+    {
+      "name": "download_entities",
+      "group": "entityoperation",
+      "description": "Download a list of entities for a processor, optionally materializing them as a dataset.",
+      "parameters": [
+        {
+          "name": "identifiers",
+          "type": "list[str]"
+        },
+        {
+          "name": "processor_type",
+          "type": "str",
+          "default": "structure"
+        },
+        {
+          "name": "dataset_name",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "create_dataset",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "name": "materialize_entities",
+          "type": "bool",
+          "default": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "downloaded",
+          "failed",
+          "context"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity",
+        "download",
+        "batch"
+      ]
+    },
+    {
+      "name": "download_entity",
+      "group": "entityoperation",
+      "description": "Download a single entity (structure or sequence) and register it with the appropriate processor.",
+      "parameters": [
+        {
+          "name": "entity_id",
+          "type": "str"
+        },
+        {
+          "name": "processor_type",
+          "type": "str",
+          "default": "structure"
+        },
+        {
+          "name": "source",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "name": "materialize_entities",
+          "type": "bool",
+          "default": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "registered",
+          "context_handle"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity",
+        "download"
+      ]
+    },
+    {
+      "name": "download_sources",
+      "group": "entityoperation",
+      "description": "List valid download sources/aliases for a processor.",
+      "parameters": [
+        {
+          "name": "processor_type",
+          "type": "str",
+          "default": "structure"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "sources",
+          "canonical",
+          "hint"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity",
+        "download",
+        "guide"
+      ]
+    },
+    {
+      "name": "embedding_cosine_similarity",
+      "group": "embedding",
+      "description": "Compute cosine similarities between embeddings in a dataset.\n\n            Args:\n                dataset_name: Embedding dataset to analyze.\n                reference_id: Entity to compare against.\n   ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "reference_id",
+          "type": "string"
+        },
+        {
+          "name": "target_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "embedding"
+      ]
+    },
+    {
+      "name": "embedding_generate",
+      "group": "embedding",
+      "description": "Generate embeddings for a dataset or explicit sequence mapping.\n\n            Args:\n                model_name: Name of the embedding model to use.\n                dataset_name: Name of sequence datase",
+      "parameters": [
+        {
+          "name": "model_name",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "embedding_types",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_prefix",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "register_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "device",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "embedding"
+      ]
+    },
+    {
+      "name": "embedding_list_models",
+      "group": "embedding",
+      "description": "List available embedding models with dimensions/descriptions.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "query",
+        "embedding"
+      ]
+    },
+    {
+      "name": "embedding_load_dataset",
+      "group": "embedding",
+      "description": "Summarise an embedding dataset and optionally return selected embeddings.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_embeddings",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "sequence_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "optional": true,
+          "default": 10
+        },
+        {
+          "name": "truncate_length",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "dataset",
+        "query",
+        "embedding"
+      ]
+    },
+    {
+      "name": "entity_info",
+      "group": "entity",
+      "description": "\n            Get comprehensive information about an entity.\n            \n            Shows all formats where the entity exists and associated metadata.\n            \n            Args:\n                e",
+      "parameters": [
+        {
+          "name": "entity_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity"
+      ]
+    },
+    {
+      "name": "entity_list_entities",
+      "group": "entity",
+      "description": "\n            List all entities available for a specific processor type.\n            \n            Args:\n                processor_type: Type of processor (structure, sequence, grn, etc.)\n              ",
+      "parameters": [
+        {
+          "name": "processor_type",
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "offset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity",
+        "query"
+      ]
+    },
+    {
+      "name": "entity_search_entities",
+      "group": "entity",
+      "description": "\n            Search for entities across one or more processor types.\n            \n            Args:\n                query: Search query (substring or regex)\n                processor_types: List of pr",
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string"
+        },
+        {
+          "name": "processor_types",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "regex",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "case_sensitive",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "entity"
+      ]
+    },
+    {
+      "name": "export_property_table",
+      "group": "export",
+      "description": "\n            Export a property table or subset as CSV/JSON.\n            \n            Args:\n                dataset_name: Dataset to export\n                entities: List of entities to include (None f",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "entities",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "properties",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "export",
+        "property"
+      ]
+    },
+    {
+      "name": "extract_ligands_from_structure",
+      "group": "analysis",
+      "description": "\n            Extract all ligands from a protein structure.\n            \n            Args:\n                pdb_id: PDB identifier\n                exclude_common: Exclude water, ions, common molecules\n ",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "exclude_common",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "min_atoms",
+          "type": "integer",
+          "optional": true,
+          "default": 3
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "extract_sequence_from_structure",
+      "group": "analysis",
+      "description": "\n            Extract amino acid sequence from a protein structure.\n            \n            Args:\n                pdb_id: PDB identifier of the structure\n                chain_id: Chain ID to extract ",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "string",
+          "optional": true,
+          "default": "A"
+        },
+        {
+          "name": "save_to_sequence",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "extract_sequence_from_structure_batch",
+      "group": "analysis",
+      "description": "\n            Extract sequences from all structures in a dataset.\n\n            This is a batch operation that processes multiple structures and\n            extracts their sequences, optionally saving t",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_as_dataset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "extract_sequences_from_structure",
+      "group": "analysis",
+      "description": "\n            Extract amino acid sequences from protein chains in a structure.\n            \n            This tool extracts sequences from specified chains (or all chains) in a \n            protein stru",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_as_fasta",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "filter_drug_like_ligands",
+      "group": "analysis",
+      "description": "\n            Filter ligands by drug-like properties (Lipinski's rule of 5).\n            \n            Args:\n                entity_names: List of ligand entity names or SMILES\n                strict: A",
+      "parameters": [
+        {
+          "name": "entity_names",
+          "type": "array"
+        },
+        {
+          "name": "strict",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "ligand"
+      ]
+    },
+    {
+      "name": "filter_entities_by_property",
+      "group": "analysis",
+      "description": "\n            Filter entities based on property values.\n            \n            Args:\n                dataset_name: Name of the property dataset\n                property_name: Property to filter by\n  ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "property_name",
+          "type": "string"
+        },
+        {
+          "name": "operator",
+          "type": "string"
+        },
+        {
+          "name": "value",
+          "type": "any"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "analysis",
+        "property"
+      ]
+    },
+    {
+      "name": "find_ligand_in_structures",
+      "group": "query",
+      "description": "\n            Find PDB structures containing a specific ligand.\n            \n            Args:\n                ligand_code: Three-letter ligand code (e.g., 'ATP', 'NAD', 'HEM')\n                \n       ",
+      "parameters": [
+        {
+          "name": "ligand_code",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure",
+        "query"
+      ]
+    },
+    {
+      "name": "get_all_sequences_from_structure",
+      "group": "query",
+      "description": "\n            Extract sequences from all chains in a structure.\n            \n            Args:\n                pdb_id: PDB identifier\n                save_to_sequence: If True, save all to sequence pro",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "save_to_sequence",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure",
+        "query"
+      ]
+    },
+    {
+      "name": "get_entity_property_values",
+      "group": "query",
+      "description": "\n            Get all property values for a specific entity.\n            \n            Args:\n                entity_id: Entity identifier\n                dataset_name: Specific dataset (None to search a",
+      "parameters": [
+        {
+          "name": "entity_id",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property",
+        "query"
+      ]
+    },
+    {
+      "name": "get_grn_for_entities",
+      "group": "query",
+      "description": "\n            Get GRN annotations for specific entities from a GRN table.\n            \n            Args:\n                entity_list: List of entity IDs to query\n                grn_table: Name of the ",
+      "parameters": [
+        {
+          "name": "entity_list",
+          "type": "array"
+        },
+        {
+          "name": "grn_table",
+          "type": "string"
+        },
+        {
+          "name": "positions",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn",
+        "query"
+      ]
+    },
+    {
+      "name": "get_grn_table_stats",
+      "group": "query",
+      "description": "\n            Get detailed statistics about a GRN table.\n            \n            Analyzes coverage, conservation, and missing data patterns.\n            \n            Args:\n                table_name: ",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn",
+        "query"
+      ]
+    },
+    {
+      "name": "get_property_statistics",
+      "group": "query",
+      "description": "\n            Get statistics for properties in a dataset.\n            \n            Args:\n                dataset_name: Name of the property dataset\n                property_name: Specific property to a",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "property_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property",
+        "query"
+      ]
+    },
+    {
+      "name": "get_protein_ligands_from_chembl",
+      "group": "query",
+      "description": "\n            Get bioactive ligands for a protein from ChEMBL.\n\n            Args:\n                protein_id: Protein identifier (UniProt ID, gene name, or ChEMBL target)\n                activity_types",
+      "parameters": [
+        {
+          "name": "protein_id",
+          "type": "string"
+        },
+        {
+          "name": "activity_types",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "min_pchembl",
+          "type": "number",
+          "optional": true,
+          "default": 5.0
+        },
+        {
+          "name": "max_value_nm",
+          "type": "number",
+          "optional": true,
+          "default": 10000.0
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "optional": true,
+          "default": 100
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "query"
+      ]
+    },
+    {
+      "name": "get_server_info",
+      "group": "query",
+      "description": "",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "query"
+      ]
+    },
+    {
+      "name": "get_structure_chains",
+      "group": "query",
+      "description": "\n            Get list of chains in a structure.\n            \n            Args:\n                pdb_id: PDB identifier\n                \n            Returns:\n                Dictionary with chain inform",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "query"
+      ]
+    },
+    {
+      "name": "grn_align_dataset_to_reference",
+      "group": "grn",
+      "description": "\n            Align all sequences in a dataset to a GRN reference table.\n            \n            This tool uses dataset and reference names rather than requiring\n            sequences to be passed as ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "reference_name",
+          "type": "string"
+        },
+        {
+          "name": "min_identity",
+          "type": "number",
+          "optional": true,
+          "default": 0.25
+        },
+        {
+          "name": "alignment_method",
+          "type": "string",
+          "optional": true,
+          "default": "mmseqs2"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn",
+        "dataset"
+      ]
+    },
+    {
+      "name": "grn_align_sequences_to_reference",
+      "group": "grn",
+      "description": "\n            Align query sequences to a GRN reference database using raw sequences.\n            \n            Note: For dataset-based alignment, use grn_align_dataset_to_reference instead.\n            ",
+      "parameters": [
+        {
+          "name": "query_sequences",
+          "type": "object"
+        },
+        {
+          "name": "reference_name",
+          "type": "string"
+        },
+        {
+          "name": "min_identity",
+          "type": "number",
+          "optional": true,
+          "default": 0.25
+        },
+        {
+          "name": "alignment_method",
+          "type": "string",
+          "optional": true,
+          "default": "mmseqs2"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_compare_conservation",
+      "group": "grn",
+      "description": "\n            Compare GRN conservation between two groups of entities.\n            \n            Args:\n                grn_table: Name of the GRN table\n                entity_group1: First group of enti",
+      "parameters": [
+        {
+          "name": "grn_table",
+          "type": "string"
+        },
+        {
+          "name": "entity_group1",
+          "type": "array"
+        },
+        {
+          "name": "entity_group2",
+          "type": "array"
+        },
+        {
+          "name": "min_conservation",
+          "type": "number",
+          "optional": true,
+          "default": 0.8
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_create_table",
+      "group": "grn",
+      "description": "\n            Create and save a GRN table from assignments.\n            \n            Args:\n                grn_assignments: GRN assignments from assign_grn_to_sequences\n                dataset_name: Na",
+      "parameters": [
+        {
+          "name": "grn_assignments",
+          "type": "object"
+        },
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "normalize_formats",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_extract_sequences_from_dataset",
+      "group": "grn",
+      "description": "\n            Extract sequences from all entities in a dataset.\n            \n            This tool loads entities from storage rather than requiring sequences\n            as input. Works with both stru",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "processor_type",
+          "type": "string",
+          "optional": true,
+          "default": "structure"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn",
+        "dataset"
+      ]
+    },
+    {
+      "name": "grn_extract_sequences_from_structures",
+      "group": "grn",
+      "description": "\n            Extract amino acid sequences from a structure dataset (deprecated).\n            \n            Note: Use grn_extract_sequences_from_dataset for improved functionality.\n            \n        ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": "all"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn",
+        "structure"
+      ]
+    },
+    {
+      "name": "grn_get_config",
+      "group": "grn",
+      "description": "\n            Get GRN configuration for a protein family.\n            \n            Args:\n                protein_family: Protein family name (e.g., \"gpcr_a\", \"kinase\")\n                strict: Whether t",
+      "parameters": [
+        {
+          "name": "protein_family",
+          "type": "string",
+          "optional": true,
+          "default": "gpcr_a"
+        },
+        {
+          "name": "strict",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_get_coverage_stats",
+      "group": "grn",
+      "description": "\n            Calculate coverage statistics for a GRN table.\n            \n            Args:\n                dataset_name: Name of the GRN dataset\n                \n            Returns:\n                D",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_query_entity",
+      "group": "grn",
+      "description": "\n            Get GRN annotations for a specific entity from a GRN table.\n\n            Use this tool to inspect the GRN annotation of a single entity/sequence.\n            Optionally filter to specific",
+      "parameters": [
+        {
+          "name": "grn_table",
+          "type": "string"
+        },
+        {
+          "name": "entity_id",
+          "type": "string"
+        },
+        {
+          "name": "positions",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "grn_query_position",
+      "group": "grn",
+      "description": "\n            Get amino acid distribution at specific GRN positions.\n\n            Use this tool to analyze conservation or variation at specific GRN positions\n            across all entities in a GRN t",
+      "parameters": [
+        {
+          "name": "grn_table",
+          "type": "string"
+        },
+        {
+          "name": "positions",
+          "type": "array"
+        },
+        {
+          "name": "include_entity_details",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn"
+      ]
+    },
+    {
+      "name": "guide_explain_concept",
+      "group": "guide",
+      "description": "Explain a Protos concept (entity, processor, dataset, etc.).",
+      "parameters": [
+        {
+          "name": "concept",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "explanation"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "guide",
+        "concept"
+      ]
+    },
+    {
+      "name": "guide_tool_help",
+      "group": "guide",
+      "description": "Surface catalog metadata (and optional usage notes) for any registered tool.",
+      "parameters": [
+        {
+          "name": "tool_name",
+          "type": "str",
+          "optional": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "description",
+          "parameters",
+          "catalog_path"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "guide",
+        "tools"
+      ]
+    },
+    {
+      "name": "guide_workflow_example",
+      "group": "guide",
+      "description": "Retrieve MCP-tool equivalents for canonical Protos workflows.",
+      "parameters": [
+        {
+          "name": "workflow_type",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "steps"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "guide",
+        "workflow"
+      ]
+    },
+    {
+      "name": "input_register",
+      "group": "input.loader",
+      "description": "Register files from input folder. Creates datasets for multiple files, individual entities for singles.",
+      "parameters": [
+        {
+          "name": "processor_type",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "dataset_name",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "returns": {
+        "fields": [
+          "registered_count",
+          "datasets_created",
+          "failed_count"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "input",
+        "register",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "input_scan",
+      "group": "input.loader",
+      "description": "Scan input folder and return sparse summary of available files by type.",
+      "parameters": [],
+      "returns": {
+        "fields": [
+          "total_files",
+          "types",
+          "next_step"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "input",
+        "scan",
+        "loader"
+      ]
+    },
+    {
+      "name": "ligand_calculate_molecular_properties",
+      "group": "ligand",
+      "description": "\n            Calculate molecular properties for a SMILES string.\n            \n            Uses RDKit to calculate properties including:\n            - Molecular weight\n            - LogP (lipophilicity",
+      "parameters": [
+        {
+          "name": "smiles",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "ligand_compute_interactions",
+      "group": "ligand",
+      "description": "Compute ligand-protein contacts for a structure.\n\n            Args:\n                structure_id: Structure to analyze.\n                ligand_names: Filter to specific ligands (optional).\n           ",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "ligand_names",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "distance_cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 4.0
+        },
+        {
+          "name": "preview_rows",
+          "type": "integer",
+          "optional": true,
+          "default": 25
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "ligand_dataset_stats",
+      "group": "ligand",
+      "description": "Summarize a ligand dataset (entity count, metadata).",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "dataset"
+      ]
+    },
+    {
+      "name": "ligand_import_sdf",
+      "group": "ligand",
+      "description": "\n            Import ligands from an SDF file and register them as entities.\n\n            This tool imports molecules from an SDF file, creating:\n            - Structure entities (with 3D coordinates f",
+      "parameters": [
+        {
+          "name": "file_path",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "chain_id",
+          "type": "string",
+          "optional": true,
+          "default": "L"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "ligand_import_smiles_structures",
+      "group": "ligand",
+      "description": "Create structure entities from SMILES strings via LigandLoader.",
+      "parameters": [
+        {
+          "name": "smiles_map",
+          "type": "object"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "chain_id",
+          "type": "string",
+          "optional": true,
+          "default": "L"
+        },
+        {
+          "name": "generate_3d",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "ligand_modify_smiles",
+      "group": "ligand",
+      "description": "\n            Modify a SMILES string by replacing an atom element.\n\n            Can replace a specific atom by index, or find and replace occurrences\n            of an element (optionally restricted to",
+      "parameters": [
+        {
+          "name": "smiles",
+          "type": "string"
+        },
+        {
+          "name": "atom_index",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "old_element",
+          "type": "string",
+          "optional": true,
+          "default": "C"
+        },
+        {
+          "name": "new_element",
+          "type": "string",
+          "optional": true,
+          "default": "N"
+        },
+        {
+          "name": "in_ring_only",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "occurrence",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "ligand_record_interactions",
+      "group": "ligand",
+      "description": "Record ligand interaction rows into a property table.",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        },
+        {
+          "name": "interactions",
+          "type": "array"
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "allow_create",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "ligand_register_smiles",
+      "group": "ligand",
+      "description": "Register SMILES records as ligand entities and persist a dataset.",
+      "parameters": [
+        {
+          "name": "smiles_map",
+          "type": "object"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "loader"
+      ]
+    },
+    {
+      "name": "ligand_smiles_to_inchi",
+      "group": "ligand",
+      "description": "\n            Convert SMILES to InChI and InChI Key.\n            \n            Args:\n                smiles: SMILES string\n                \n            Returns:\n                Dictionary with InChI rep",
+      "parameters": [
+        {
+          "name": "smiles",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand"
+      ]
+    },
+    {
+      "name": "list_grn_tables",
+      "group": "list",
+      "description": "\n            List all available GRN tables.\n            \n            Returns both reference tables and user-created tables.\n            \n            Returns:\n                Dictionary with lists of a",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "grn",
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "list_ligand_entities",
+      "group": "list",
+      "description": "List registered ligand entities with optional pagination.",
+      "parameters": [
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "optional": true,
+          "default": 0
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "list_models",
+      "group": "list",
+      "description": "List registered model cards available through ModelManager.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "list_property_tables",
+      "group": "list",
+      "description": "List all property tables registered with Protos.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property",
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "list_sequence_entities",
+      "group": "list",
+      "description": "List registered sequence entities with optional pagination.",
+      "parameters": [
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "optional": true,
+          "default": 0
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "list_structure_entities",
+      "group": "list",
+      "description": "List registered structure entities with optional pagination.",
+      "parameters": [
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "optional": true,
+          "default": 0
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "query",
+        "list"
+      ]
+    },
+    {
+      "name": "load_entity",
+      "group": "load",
+      "description": "\n            Load an entity's data.\n\n            Args:\n                name: Entity name\n                format: Processor type (structure, sequence, etc.)\n                output_format: How to return",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "format",
+          "type": "string"
+        },
+        {
+          "name": "output_format",
+          "type": "string",
+          "optional": true,
+          "default": "summary"
+        },
+        {
+          "name": "max_preview_rows",
+          "type": "integer",
+          "optional": true,
+          "default": 250
+        },
+        {
+          "name": "max_preview_items",
+          "type": "integer",
+          "optional": true,
+          "default": 120
+        },
+        {
+          "name": "max_preview_chars",
+          "type": "integer",
+          "optional": true,
+          "default": 800
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "query"
+      ]
+    },
+    {
+      "name": "load_grn_reference_table",
+      "group": "load",
+      "description": "\n            Load a GRN reference table for sequence annotation.\n            \n            Available reference tables include:\n            - gpcrdb_ref: GPCR reference numbering from GPCRdb\n           ",
+      "parameters": [
+        {
+          "name": "reference_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "grn",
+        "query"
+      ]
+    },
+    {
+      "name": "load_grn_table",
+      "group": "load",
+      "description": "\n            Load any GRN table (not just reference tables).\n            \n            This loads user-created GRN tables from the tables/ directory.\n            \n            Args:\n                tabl",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "grn",
+        "query"
+      ]
+    },
+    {
+      "name": "load_ligand_dataset",
+      "group": "load",
+      "description": "Summarize a ligand dataset and optionally preview member entities.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "preview_count",
+          "type": "integer",
+          "optional": true,
+          "default": 25
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "ligand",
+        "query",
+        "dataset"
+      ]
+    },
+    {
+      "name": "load_ligand_entity",
+      "group": "load",
+      "description": "Load a ligand entity and preview its metadata.",
+      "parameters": [
+        {
+          "name": "ligand_id",
+          "type": "string"
+        },
+        {
+          "name": "include_structure",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "ligand",
+        "query"
+      ]
+    },
+    {
+      "name": "load_property_rows",
+      "group": "load",
+      "description": "Load property rows, optionally filtered by entity scope.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "entity_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "scope_format",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "query",
+        "property"
+      ]
+    },
+    {
+      "name": "load_property_table",
+      "group": "load",
+      "description": "Load a property table as JSON for inspection.",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "query",
+        "property"
+      ]
+    },
+    {
+      "name": "load_sequence",
+      "group": "load",
+      "description": "Load a sequence entity and return summary details.",
+      "parameters": [
+        {
+          "name": "sequence_id",
+          "type": "string"
+        },
+        {
+          "name": "include_sequence",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "preview_length",
+          "type": "integer",
+          "optional": true,
+          "default": 120
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "load",
+        "query"
+      ]
+    },
+    {
+      "name": "load_sequence_dataset",
+      "group": "load",
+      "description": "Load a sequence dataset and summarize its members.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_sequences",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "max_sequences",
+          "type": "integer",
+          "optional": true,
+          "default": 50
+        },
+        {
+          "name": "preview_length",
+          "type": "integer",
+          "optional": true,
+          "default": 120
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "load",
+        "query",
+        "dataset"
+      ]
+    },
+    {
+      "name": "load_structure",
+      "group": "load",
+      "description": "Load a structure entity and return summary details.",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "include_atoms",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "max_atoms",
+          "type": "integer",
+          "optional": true,
+          "default": 2000
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "structure",
+        "query"
+      ]
+    },
+    {
+      "name": "load_structure_dataset",
+      "group": "load",
+      "description": "Load a structure dataset and summarize its members.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_summaries",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "max_entities",
+          "type": "integer",
+          "optional": true,
+          "default": 50
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "load",
+        "structure",
+        "query",
+        "dataset"
+      ]
+    },
+    {
+      "name": "merge_property_tables",
+      "group": "dataset",
+      "description": "\n            Merge multiple property tables into one.\n            \n            Args:\n                dataset_names: List of datasets to merge\n                output_name: Name for the merged dataset\n ",
+      "parameters": [
+        {
+          "name": "dataset_names",
+          "type": "array"
+        },
+        {
+          "name": "output_name",
+          "type": "string"
+        },
+        {
+          "name": "how",
+          "type": "string",
+          "optional": true,
+          "default": "outer"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property",
+        "dataset"
+      ]
+    },
+    {
+      "name": "model_ingest_outputs",
+      "group": "modelmanager",
+      "description": "Ingest property tables or other artifacts referenced by an invocation payload.",
+      "parameters": [
+        {
+          "name": "invocation",
+          "type": "dict",
+          "optional": true
+        },
+        {
+          "name": "runtime_metadata",
+          "type": "dict",
+          "optional": true
+        },
+        {
+          "name": "outputs",
+          "type": "list[dict]",
+          "optional": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "ingest"
+      ]
+    },
+    {
+      "name": "model_lambda_prepare_resources",
+      "group": "model",
+      "description": "Copy and normalize Lambda model resources into the active data root.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model"
+      ]
+    },
+    {
+      "name": "model_lambda_run",
+      "group": "model",
+      "description": "Run the full Lambda workflow (dataset \u2192 GRN \u2192 prediction) in one call.",
+      "parameters": [
+        {
+          "name": "protein_family",
+          "type": "string"
+        },
+        {
+          "name": "sequence_dataset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "reference_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "dataset_metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "overwrite_dataset",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "materialize_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "run_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "property_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "embedding_model",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "embedding_type",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "batch_size",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "collect_attention",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "ingest_embeddings",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "prefer_checkpoint",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "debug",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "invocation_metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model"
+      ]
+    },
+    {
+      "name": "model_prepare_batch",
+      "group": "modelmanager",
+      "description": "Record a batch of entity configs (without executing them).",
+      "parameters": [
+        {
+          "name": "model_name",
+          "type": "str"
+        },
+        {
+          "name": "entity_configs",
+          "type": "list[dict]"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "name",
+          "inputs"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "batch"
+      ]
+    },
+    {
+      "name": "model_prepare_boltz_mutations",
+      "group": "modelmanager",
+      "description": "Prepare Boltz configuration YAML/FASTA bundles for explicit mutation payloads.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "str"
+        },
+        {
+          "name": "mutation_entries",
+          "type": "list[dict]"
+        },
+        {
+          "name": "model_name",
+          "type": "str",
+          "default": "boltz2"
+        },
+        {
+          "name": "base_config",
+          "type": "dict",
+          "optional": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "boltz",
+        "mutations"
+      ]
+    },
+    {
+      "name": "model_prepare_input",
+      "group": "modelmanager",
+      "description": "Prepare an invocation for a single entity/dataset pair.",
+      "parameters": [
+        {
+          "name": "model_name",
+          "type": "str"
+        },
+        {
+          "name": "entity",
+          "type": "str"
+        },
+        {
+          "name": "dataset_name",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "entity_format",
+          "type": "str",
+          "default": "sequence"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "prepare"
+      ]
+    },
+    {
+      "name": "model_prepare_job",
+      "group": "modelmanager",
+      "description": "Low-level wrapper around ModelManager.prepare for arbitrary adapters.",
+      "parameters": [
+        {
+          "name": "model_name",
+          "type": "str"
+        },
+        {
+          "name": "inputs",
+          "type": "dict[str,Any]"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "job",
+          "runtime",
+          "metadata"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "prepare"
+      ]
+    },
+    {
+      "name": "model_prepare_mutation_screen",
+      "group": "modelmanager",
+      "description": "Prepare Boltz-style mutation configs across GRN positions.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "str"
+        },
+        {
+          "name": "grn_positions",
+          "type": "list[str]"
+        },
+        {
+          "name": "mutations",
+          "type": "list[str]"
+        },
+        {
+          "name": "model_name",
+          "type": "str",
+          "default": "boltz2"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "model",
+        "mutations"
+      ]
+    },
+    {
+      "name": "protos_guide",
+      "group": "guide",
+      "description": "Interactive guidance on Protos processors, data management, and workflows.",
+      "parameters": [
+        {
+          "name": "topic",
+          "type": "str",
+          "optional": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "available_topics",
+          "content"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "guide"
+      ]
+    },
+    {
+      "name": "record_property_rows",
+      "group": "property",
+      "description": "Append rows to a property table using `record_properties`.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "rows",
+          "type": "any"
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "allow_create",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property"
+      ]
+    },
+    {
+      "name": "register_chembl_ligand_dataset",
+      "group": "loader",
+      "description": "Install the packaged ChEMBL ligand reference dataset.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "register_gpcr_property_dataset",
+      "group": "loader",
+      "description": "Install the packaged GPCR ligand-binding property dataset.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "register_gpcr_sequence_dataset",
+      "group": "loader",
+      "description": "Install the packaged GPCR agonist/antagonist sequence dataset.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "register_rhodopsin_graph_dataset",
+      "group": "loader",
+      "description": "Install the packaged rhodopsin residue graph dataset.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "register_rhodopsin_structure_dataset",
+      "group": "loader",
+      "description": "Install the packaged rhodopsin state structure dataset.",
+      "parameters": [],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "save_entity",
+      "group": "save",
+      "description": "\n            Save a new entity or update existing one.\n\n            Args:\n                name: Entity name\n                data: Entity data (JSON object, JSON string, or base64 encoded string)\n     ",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "data",
+          "type": "any"
+        },
+        {
+          "name": "format",
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "data_encoding",
+          "type": "string",
+          "optional": true,
+          "default": "json"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "save"
+      ]
+    },
+    {
+      "name": "save_property_table",
+      "group": "save",
+      "description": "Persist property table metadata and ensure dataset registration is updated.",
+      "parameters": [
+        {
+          "name": "table_name",
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "save",
+        "property"
+      ]
+    },
+    {
+      "name": "search_similar_ligands",
+      "group": "query",
+      "description": "\n            Search for similar ligands using Tanimoto similarity.\n\n            Args:\n                query_smiles: Query SMILES string\n                similarity_threshold: Minimum similarity score (",
+      "parameters": [
+        {
+          "name": "query_smiles",
+          "type": "string"
+        },
+        {
+          "name": "similarity_threshold",
+          "type": "number",
+          "optional": true,
+          "default": 0.7
+        },
+        {
+          "name": "dataset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "search_chembl",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "max_results",
+          "type": "integer",
+          "optional": true,
+          "default": 100
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "query"
+      ]
+    },
+    {
+      "name": "sequence_align_mmseqs",
+      "group": "sequence",
+      "description": "Run MMseqs pairwise alignment over a collection of sequences.",
+      "parameters": [
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequence_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "store_in_context",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "context_label",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_align_to_reference",
+      "group": "sequence",
+      "description": "Align multiple sequences against a reference using SequenceProcessor helpers.",
+      "parameters": [
+        {
+          "name": "reference_id",
+          "type": "string"
+        },
+        {
+          "name": "sequence_ids",
+          "type": "array"
+        },
+        {
+          "name": "save_alignments",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "aligned_dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "include_reference_in_dataset",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "summary_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "property_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_annotate_with_grn",
+      "group": "sequence",
+      "description": "Annotate sequences with GRN positions using bundled references.",
+      "parameters": [
+        {
+          "name": "reference_table",
+          "type": "string"
+        },
+        {
+          "name": "protein_family",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "entity_names",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "output_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "allow_create",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "grn"
+      ]
+    },
+    {
+      "name": "sequence_calculate_identity_from_dataset",
+      "group": "sequence",
+      "description": "\n            Calculate pairwise sequence identities for all sequences in a dataset.\n\n            Args:\n                dataset_name: Name of the sequence dataset\n                reference_entity: Opti",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "reference_entity",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "dataset"
+      ]
+    },
+    {
+      "name": "sequence_compute_conservation",
+      "group": "sequence",
+      "description": "Compute per-position conservation across aligned sequences.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "ignore_gaps",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "pseudocount",
+          "type": "number",
+          "optional": true,
+          "default": 0.0
+        },
+        {
+          "name": "normalize_entropy",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "store_result",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "result_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "store_in_context",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "context_label",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_compute_linkage",
+      "group": "sequence",
+      "description": "Compute residue linkage using mutual information.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "ignore_gaps",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "min_observations",
+          "type": "integer",
+          "optional": true,
+          "default": 5
+        },
+        {
+          "name": "normalize",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "top_k",
+          "type": "any",
+          "optional": true,
+          "default": 20
+        },
+        {
+          "name": "store_result",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "result_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "store_in_context",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "context_label",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_create_mutant_library",
+      "group": "sequence",
+      "description": "Generate a mutant library and optionally persist it.",
+      "parameters": [
+        {
+          "name": "base_sequence_id",
+          "type": "string"
+        },
+        {
+          "name": "mutation_map",
+          "type": "object"
+        },
+        {
+          "name": "base_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "include_wildtype",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "limit",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "zero_indexed",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "register_mutations",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "register",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "field_register",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "materialize_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "return_metadata",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_dataset_stats",
+      "group": "sequence",
+      "description": "Summarize a sequence dataset (entity counts, length stats).",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "dataset"
+      ]
+    },
+    {
+      "name": "sequence_detect_mutations",
+      "group": "sequence",
+      "description": "\n            Detect mutations between wild-type and variant sequences using raw sequences.\n\n            Note: For entity-based mutation detection, use sequence_detect_mutations_between_entities instea",
+      "parameters": [
+        {
+          "name": "wild_type",
+          "type": "string"
+        },
+        {
+          "name": "variant",
+          "type": "string"
+        },
+        {
+          "name": "numbering_start",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_detect_mutations_between_entities",
+      "group": "sequence",
+      "description": "\n            Detect mutations between two sequence entities.\n\n            Args:\n                reference_entity: Reference sequence entity ID\n                variant_entity: Variant sequence entity I",
+      "parameters": [
+        {
+          "name": "reference_entity",
+          "type": "string"
+        },
+        {
+          "name": "variant_entity",
+          "type": "string"
+        },
+        {
+          "name": "include_positions",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_download",
+      "group": "sequence.loader",
+      "description": "Download a FASTA source (local or UniProt) into the sequence processor.",
+      "parameters": [
+        {
+          "name": "identifier",
+          "type": "str"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "materialize_entities",
+          "type": "bool",
+          "default": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "registered",
+          "entity_type",
+          "context_handle"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "loader"
+      ]
+    },
+    {
+      "name": "sequence_export_dataset",
+      "group": "sequence",
+      "description": "Export a sequence dataset to a managed FASTA artifact.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "export_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequence_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "materialize_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "overwrite",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "optional": true,
+          "default": "fasta"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "dataset"
+      ]
+    },
+    {
+      "name": "sequence_export_entity",
+      "group": "sequence",
+      "description": "Export a single sequence entity to FASTA.",
+      "parameters": [
+        {
+          "name": "sequence_id",
+          "type": "string"
+        },
+        {
+          "name": "export_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "sequence_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "overwrite",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "optional": true,
+          "default": "fasta"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_find_best_match",
+      "group": "sequence",
+      "description": "Find the best-matching reference sequence for a query.",
+      "parameters": [
+        {
+          "name": "query_sequence",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "query_entity",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "reference_sequences",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "reference_ids",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "reference_dataset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "use_mmseqs",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_find_conserved_regions",
+      "group": "sequence",
+      "description": "\n            Find conserved regions across multiple sequences using raw sequences.\n\n            Note: For dataset-based conservation analysis, use sequence_find_conserved_regions_in_dataset instead.\n\n",
+      "parameters": [
+        {
+          "name": "sequences",
+          "type": "object"
+        },
+        {
+          "name": "min_conservation",
+          "type": "number",
+          "optional": true,
+          "default": 0.8
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "optional": true,
+          "default": 5
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "sequence_find_conserved_regions_in_dataset",
+      "group": "sequence",
+      "description": "\n            Find conserved regions across all sequences in a dataset.\n\n            Args:\n                dataset_name: Name of the sequence dataset\n                min_conservation: Minimum conservat",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "min_conservation",
+          "type": "number",
+          "optional": true,
+          "default": 0.8
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "optional": true,
+          "default": 5
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "dataset"
+      ]
+    },
+    {
+      "name": "sequence_inspect_identifier",
+      "group": "sequence.loader",
+      "description": "Parse a sequence identifier to understand its source without downloading.",
+      "parameters": [
+        {
+          "name": "identifier",
+          "type": "str"
+        }
+      ],
+      "returns": {
+        "fields": [
+          "source",
+          "name"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "loader"
+      ]
+    },
+    {
+      "name": "sequence_load_dataset",
+      "group": "sequence.loader",
+      "description": "Load a registered sequence dataset for inspection.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "str"
+        },
+        {
+          "name": "include_sequences",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "name": "preview_length",
+          "type": "int",
+          "default": 120
+        }
+      ],
+      "returns": {
+        "fields": [
+          "entities",
+          "entity_count"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "load"
+      ]
+    },
+    {
+      "name": "sequence_register_records",
+      "group": "sequence.loader",
+      "description": "Register in-memory sequence records (FASTA-style dictionaries).",
+      "parameters": [
+        {
+          "name": "records",
+          "type": "list[dict]"
+        },
+        {
+          "name": "dataset_name",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "returns": {
+        "fields": [
+          "entities",
+          "dataset",
+          "context"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "loader"
+      ]
+    },
+    {
+      "name": "sequence_save_sequences",
+      "group": "sequence",
+      "description": "Persist multiple sequences via SequenceProcessor.save_sequences.",
+      "parameters": [
+        {
+          "name": "sequences",
+          "type": "object"
+        },
+        {
+          "name": "output_file",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "materialize_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "structure_align_to_reference",
+      "group": "structure",
+      "description": "Align structures via `StructureProcessor.align_and_record` and surface registry artifacts.",
+      "parameters": [
+        {
+          "name": "reference_id",
+          "type": "string"
+        },
+        {
+          "name": "structure_ids",
+          "type": "array"
+        },
+        {
+          "name": "method",
+          "type": "string",
+          "optional": true,
+          "default": "cealign"
+        },
+        {
+          "name": "atom_selection",
+          "type": "string",
+          "optional": true,
+          "default": "CA"
+        },
+        {
+          "name": "apply_transform",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "chain_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "cealign_window",
+          "type": "integer",
+          "optional": true,
+          "default": 8
+        },
+        {
+          "name": "cealign_max_gap",
+          "type": "integer",
+          "optional": true,
+          "default": 30
+        },
+        {
+          "name": "export_aligned",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "export_format",
+          "type": "string",
+          "optional": true,
+          "default": "cif"
+        },
+        {
+          "name": "export_directory",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "include_reference_in_dataset",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "persist_aligned",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "summary_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "property_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_analyze_binding_pocket",
+      "group": "structure",
+      "description": "\n            Analyze the binding pocket around a ligand including volume estimation.\n\n            This tool provides comprehensive binding pocket analysis including:\n            - Binding site residue",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "ligand_name",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 8.0
+        },
+        {
+          "name": "include_volume",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_analyze_ligand_interactions",
+      "group": "structure",
+      "description": "\n            Analyze detailed protein-ligand interactions including multiple interaction types.\n\n            This tool provides comprehensive interaction analysis beyond simple distance cutoffs,\n     ",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "ligand_name",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "detailed",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_annotate_entities",
+      "group": "structure",
+      "description": "Apply chain-level and optional structure-level annotations.",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_annotations",
+          "type": "object"
+        },
+        {
+          "name": "structure_metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_apply_grn_annotations",
+      "group": "structureanalysis",
+      "description": "Map a saved GRN table back onto one or more structure entities, writing the results to a column (default 'grn').",
+      "parameters": [
+        {
+          "name": "grn_table",
+          "type": "str"
+        },
+        {
+          "name": "structures",
+          "type": "list[str]"
+        },
+        {
+          "name": "column_name",
+          "type": "str",
+          "default": "grn"
+        },
+        {
+          "name": "save_entities",
+          "type": "bool",
+          "default": true
+        }
+      ],
+      "returns": {
+        "fields": [
+          "annotation_counts",
+          "skipped"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "grn"
+      ]
+    },
+    {
+      "name": "structure_collect_chain_sequences",
+      "group": "structure",
+      "description": "Collect per-chain sequences for one or more structures.",
+      "parameters": [
+        {
+          "name": "structure_ids",
+          "type": "array"
+        },
+        {
+          "name": "chain_filter",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_compare_ligand_binding_sites",
+      "group": "structure",
+      "description": "\n            Compare binding sites across multiple protein-ligand complexes.\n\n            This tool analyzes binding site conservation across structures, useful for:\n            - Understanding bindin",
+      "parameters": [
+        {
+          "name": "structures",
+          "type": "array"
+        },
+        {
+          "name": "cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 5.0
+        },
+        {
+          "name": "similarity_threshold",
+          "type": "number",
+          "optional": true,
+          "default": 0.5
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_compute_embedding_similarity",
+      "group": "structure",
+      "description": "Compute per-residue embedding similarity relative to a reference chain.",
+      "parameters": [
+        {
+          "name": "reference_structure",
+          "type": "string"
+        },
+        {
+          "name": "reference_chain",
+          "type": "string"
+        },
+        {
+          "name": "embedding_dataset",
+          "type": "string"
+        },
+        {
+          "name": "selection",
+          "type": "array"
+        },
+        {
+          "name": "window_size",
+          "type": "integer",
+          "optional": true,
+          "default": 8
+        },
+        {
+          "name": "max_gap",
+          "type": "integer",
+          "optional": true,
+          "default": 30
+        },
+        {
+          "name": "property_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "record_property_table",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_records",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_plot_points",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_compute_water_networks",
+      "group": "structure",
+      "description": "Analyze water-mediated residue networks for the given structures.\n\n            Returns summary counts by default. Use ``include_networks`` and\n            ``include_contacts`` to embed sanitized netwo",
+      "parameters": [
+        {
+          "name": "structure_ids",
+          "type": "any"
+        },
+        {
+          "name": "residue_cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 3.4
+        },
+        {
+          "name": "water_water_cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 3.4
+        },
+        {
+          "name": "hydrogen_bond_cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 3.2
+        },
+        {
+          "name": "property_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "allow_create_property_table",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_raw",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_networks",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "include_contacts",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "network_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "contact_table_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "allow_create_network_table",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "allow_create_contact_table",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "max_paths",
+          "type": "integer",
+          "optional": true,
+          "default": 5
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_dataset_stats",
+      "group": "structure",
+      "description": "Summarize a structure dataset (entity counts, metadata).",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "include_entities",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_export_dataset",
+      "group": "structure",
+      "description": "Export all structures in a dataset.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "output_dir",
+          "type": "string"
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "optional": true,
+          "default": "cif"
+        },
+        {
+          "name": "overwrite",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_export_entity",
+      "group": "structure",
+      "description": "Export a structure entity to file.\n\n            If output_path is not provided, exports to the standard Protos-managed\n            location (e.g., structure/mmcif/{id}.cif for CIF format).\n\n          ",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "output_path",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "optional": true,
+          "default": "cif"
+        },
+        {
+          "name": "overwrite",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_extract_all_chains_from_dataset",
+      "group": "structure",
+      "description": "\n            Extract sequences from all structures in a dataset.\n            \n            This tool processes an entire structure dataset, extracting sequences\n            from all chains (or filtered",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "save_as_fasta",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "chain_filter",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_extract_water_molecules",
+      "group": "structure",
+      "description": "List water molecules treated as ligand-like records.",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "min_atoms",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_filter_dataset",
+      "group": "structure",
+      "description": "Filter structures in a dataset by column values and optionally register the results.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "filters",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "query",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "new_dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "suffix",
+          "type": "string",
+          "optional": true,
+          "default": "_filtered"
+        },
+        {
+          "name": "register_filtered",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "drop_empty",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_filter_entities",
+      "group": "structure",
+      "description": "Filter structure entities using column-wise predicates.",
+      "parameters": [
+        {
+          "name": "structure_ids",
+          "type": "any"
+        },
+        {
+          "name": "filters",
+          "type": "array"
+        },
+        {
+          "name": "combine",
+          "type": "string",
+          "optional": true,
+          "default": "and"
+        },
+        {
+          "name": "include_columns",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save_as",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "create_dataset",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "overwrite_dataset",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "drop_empty",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "return_preview",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "preview_limit",
+          "type": "integer",
+          "optional": true,
+          "default": 20
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_get_binding_site_residues",
+      "group": "structure",
+      "description": "\n            Get residues in the binding site of a ligand.\n\n            Args:\n                pdb_id: PDB identifier\n                ligand_name: Three-letter ligand code\n                chain_id: Opt",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "ligand_name",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 5.0
+        },
+        {
+          "name": "save_to_table",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_get_ca_coordinates",
+      "group": "structure",
+      "description": "\n            Get C-alpha atom coordinates for a chain.\n            \n            Args:\n                pdb_id: PDB identifier\n                chain_id: Chain ID\n                \n            Returns:\n  ",
+      "parameters": [
+        {
+          "name": "pdb_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_id",
+          "type": "string",
+          "optional": true,
+          "default": "A"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_get_sequences_and_save_fasta",
+      "group": "structure",
+      "description": "\n            Extract sequences from structures using get_seq_dict/get_chain_dict and save as FASTA.\n            \n            This helper collects chain sequences for the provided structures and\n      ",
+      "parameters": [
+        {
+          "name": "pdb_ids",
+          "type": "array"
+        },
+        {
+          "name": "fasta_name",
+          "type": "string"
+        },
+        {
+          "name": "use_chain_dict",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_graph_generate_from_dataset",
+      "group": "structure",
+      "description": "Generate graphs for each structure in a dataset using GraphProcessor.",
+      "parameters": [
+        {
+          "name": "structure_dataset",
+          "type": "string"
+        },
+        {
+          "name": "dataset_name",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "level",
+          "type": "string",
+          "optional": true,
+          "default": "atom"
+        },
+        {
+          "name": "cutoff",
+          "type": "number",
+          "optional": true,
+          "default": 5.0
+        },
+        {
+          "name": "include_hydrogens",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_graph_load_entity",
+      "group": "structure",
+      "description": "Load a graph entity and summarize its contents.",
+      "parameters": [
+        {
+          "name": "graph_name",
+          "type": "string"
+        },
+        {
+          "name": "include_data",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "preview_nodes",
+          "type": "integer",
+          "optional": true,
+          "default": 50
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "query"
+      ]
+    },
+    {
+      "name": "structure_list_dataset_sequences",
+      "group": "structure",
+      "description": "List sequences related to each structure in a dataset.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure",
+        "query",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_merge",
+      "group": "structure",
+      "description": "\n            Merge multiple structures into a single multi-chain structure.\n\n            Use this to combine a protein structure with a ligand structure,\n            or to create multi-chain complexes",
+      "parameters": [
+        {
+          "name": "structure_ids",
+          "type": "array"
+        },
+        {
+          "name": "new_id",
+          "type": "string"
+        },
+        {
+          "name": "chain_mapping",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "record_relationships",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "relationship_metadata",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_prepare_grn_annotations",
+      "group": "structureanalysis",
+      "description": "Extract chains, filter/align them, annotate with GRN, and map the GRN labels back onto the provided structures in one call.",
+      "parameters": [
+        {
+          "name": "structure_ids",
+          "type": "list[str]"
+        },
+        {
+          "name": "reference_table",
+          "type": "str"
+        },
+        {
+          "name": "protein_family",
+          "type": "str"
+        },
+        {
+          "name": "reference_sequence_entity",
+          "type": "str",
+          "optional": true
+        },
+        {
+          "name": "alignment_threshold",
+          "type": "float",
+          "default": 0.75
+        }
+      ],
+      "returns": {
+        "fields": [
+          "filtered_dataset",
+          "grn_table",
+          "structure_annotation_summary"
+        ]
+      },
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure",
+        "grn",
+        "workflow"
+      ]
+    },
+    {
+      "name": "structure_register_chain_sequences_from_dataset",
+      "group": "structure",
+      "description": "Register per-chain sequences for all structures in a dataset.",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "dataset_prefix",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "chain_filter",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "create_dataset",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "overwrite",
+          "type": "boolean",
+          "optional": true,
+          "default": false
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        },
+        {
+          "name": "one_letter",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence",
+        "structure",
+        "loader",
+        "dataset"
+      ]
+    },
+    {
+      "name": "structure_remove_ligands",
+      "group": "structure",
+      "description": "\n            Remove all HETATM records (ligands, waters, ions) from a structure.\n\n            This keeps only ATOM records (protein/nucleic acid), removing all\n            heteroatoms including ligand",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "new_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "structure_remove_specific_ligand",
+      "group": "structure",
+      "description": "\n            Remove specific ligands from a structure while optionally keeping waters and ions.\n\n            This is useful for preparing receptor structures for docking by removing\n            the co",
+      "parameters": [
+        {
+          "name": "structure_id",
+          "type": "string"
+        },
+        {
+          "name": "ligand_residue_names",
+          "type": "array"
+        },
+        {
+          "name": "keep_waters",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "keep_ions",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        },
+        {
+          "name": "new_id",
+          "type": "any",
+          "optional": true,
+          "default": null
+        },
+        {
+          "name": "save",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "ligand",
+        "structure"
+      ]
+    },
+    {
+      "name": "superimpose_structures",
+      "group": "structure",
+      "description": "\n            Superimpose one structure onto another and save the result.\n            \n            This tool aligns a mobile structure onto a reference structure and\n            saves the transformed c",
+      "parameters": [
+        {
+          "name": "reference_pdb",
+          "type": "string"
+        },
+        {
+          "name": "mobile_pdb",
+          "type": "string"
+        },
+        {
+          "name": "output_name",
+          "type": "string"
+        },
+        {
+          "name": "atom_selection",
+          "type": "string",
+          "optional": true,
+          "default": "CA"
+        },
+        {
+          "name": "chain_selection",
+          "type": "any",
+          "optional": true,
+          "default": null
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "structure"
+      ]
+    },
+    {
+      "name": "translate_sequence",
+      "group": "sequence",
+      "description": "\n            Translate DNA/RNA sequence to protein.\n\n            Args:\n                dna_sequence: DNA or RNA sequence\n                genetic_code: NCBI genetic code table (1=standard)\n            ",
+      "parameters": [
+        {
+          "name": "dna_sequence",
+          "type": "string"
+        },
+        {
+          "name": "genetic_code",
+          "type": "integer",
+          "optional": true,
+          "default": 1
+        },
+        {
+          "name": "to_stop",
+          "type": "boolean",
+          "optional": true,
+          "default": true
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "sequence"
+      ]
+    },
+    {
+      "name": "update_property_values",
+      "group": "property",
+      "description": "\n            Update specific values in a property table.\n\n            Allows the model to modify individual cells or multiple properties\n            for specific entities without replacing the entire ",
+      "parameters": [
+        {
+          "name": "dataset_name",
+          "type": "string"
+        },
+        {
+          "name": "updates",
+          "type": "object"
+        }
+      ],
+      "returns": {},
+      "aliases": [],
+      "deprecated": false,
+      "tags": [
+        "property"
+      ]
+    }
+  ],
+  "groups": {
+    "guide": [
+      "guide_explain_concept",
+      "guide_tool_help",
+      "guide_workflow_example",
+      "protos_guide"
+    ],
+    "context": [
+      "context_clear",
+      "context_get",
+      "context_history",
+      "context_list",
+      "context_reset",
+      "context_set_active",
+      "context_status"
+    ],
+    "entityoperation": [
+      "download_entities",
+      "download_entity",
+      "download_sources"
+    ],
+    "dataset": [
+      "dataset_copy",
+      "dataset_create",
+      "dataset_delete",
+      "dataset_entities",
+      "dataset_export",
+      "dataset_info",
+      "dataset_list",
+      "dataset_load",
+      "dataset_merge",
+      "dataset_refresh_all",
+      "dataset_refresh_entities",
+      "dataset_update",
+      "merge_property_tables"
+    ],
+    "modelmanager": [
+      "model_ingest_outputs",
+      "model_prepare_batch",
+      "model_prepare_boltz_mutations",
+      "model_prepare_input",
+      "model_prepare_job",
+      "model_prepare_mutation_screen"
+    ],
+    "sequence.loader": [
+      "sequence_download",
+      "sequence_inspect_identifier",
+      "sequence_load_dataset",
+      "sequence_register_records"
+    ],
+    "input.loader": [
+      "input_register",
+      "input_scan"
+    ],
+    "structureanalysis": [
+      "structure_apply_grn_annotations",
+      "structure_prepare_grn_annotations"
+    ],
+    "query": [
+      "find_ligand_in_structures",
+      "get_all_sequences_from_structure",
+      "get_entity_property_values",
+      "get_grn_for_entities",
+      "get_grn_table_stats",
+      "get_property_statistics",
+      "get_protein_ligands_from_chembl",
+      "get_server_info",
+      "get_structure_chains",
+      "search_similar_ligands"
+    ],
+    "config": [
+      "config_get_data_root",
+      "config_initialize_data",
+      "config_reset_data",
+      "config_set_data_root"
+    ],
+    "entity": [
+      "delete_entity",
+      "delete_property_rows",
+      "entity_info",
+      "entity_list_entities",
+      "entity_search_entities"
+    ],
+    "load": [
+      "load_entity",
+      "load_grn_reference_table",
+      "load_grn_table",
+      "load_ligand_dataset",
+      "load_ligand_entity",
+      "load_property_rows",
+      "load_property_table",
+      "load_sequence",
+      "load_sequence_dataset",
+      "load_structure",
+      "load_structure_dataset"
+    ],
+    "save": [
+      "save_entity",
+      "save_property_table"
+    ],
+    "loader": [
+      "register_chembl_ligand_dataset",
+      "register_gpcr_property_dataset",
+      "register_gpcr_sequence_dataset",
+      "register_rhodopsin_graph_dataset",
+      "register_rhodopsin_structure_dataset"
+    ],
+    "list": [
+      "list_grn_tables",
+      "list_ligand_entities",
+      "list_models",
+      "list_property_tables",
+      "list_sequence_entities",
+      "list_structure_entities"
+    ],
+    "model": [
+      "describe_model",
+      "model_lambda_prepare_resources",
+      "model_lambda_run"
+    ],
+    "embedding": [
+      "embedding_cosine_similarity",
+      "embedding_generate",
+      "embedding_list_models",
+      "embedding_load_dataset"
+    ],
+    "create": [
+      "create_ligand_dataset_from_chembl",
+      "create_property_table"
+    ],
+    "property": [
+      "record_property_rows",
+      "update_property_values"
+    ],
+    "update": [
+      "add_grn_annotation",
+      "add_property_column"
+    ],
+    "analysis": [
+      "apply_grn_interval",
+      "calculate_sequence_identity",
+      "calculate_structure_properties",
+      "calculate_structure_rmsd_matrix",
+      "extract_ligands_from_structure",
+      "extract_sequence_from_structure",
+      "extract_sequence_from_structure_batch",
+      "extract_sequences_from_structure",
+      "filter_drug_like_ligands",
+      "filter_entities_by_property"
+    ],
+    "export": [
+      "export_property_table"
+    ],
+    "structure": [
+      "structure_align_to_reference",
+      "structure_analyze_binding_pocket",
+      "structure_analyze_ligand_interactions",
+      "structure_annotate_entities",
+      "structure_collect_chain_sequences",
+      "structure_compare_ligand_binding_sites",
+      "structure_compute_embedding_similarity",
+      "structure_compute_water_networks",
+      "structure_dataset_stats",
+      "structure_export_dataset",
+      "structure_export_entity",
+      "structure_extract_all_chains_from_dataset",
+      "structure_extract_water_molecules",
+      "structure_filter_dataset",
+      "structure_filter_entities",
+      "structure_get_binding_site_residues",
+      "structure_get_ca_coordinates",
+      "structure_get_sequences_and_save_fasta",
+      "structure_graph_generate_from_dataset",
+      "structure_graph_load_entity",
+      "structure_list_dataset_sequences",
+      "structure_merge",
+      "structure_register_chain_sequences_from_dataset",
+      "structure_remove_ligands",
+      "structure_remove_specific_ligand",
+      "superimpose_structures"
+    ],
+    "sequence": [
+      "align_protein_structures",
+      "align_sequences",
+      "align_sequences_by_id",
+      "cluster_dataset_sequences",
+      "cluster_sequences",
+      "sequence_align_mmseqs",
+      "sequence_align_to_reference",
+      "sequence_annotate_with_grn",
+      "sequence_calculate_identity_from_dataset",
+      "sequence_compute_conservation",
+      "sequence_compute_linkage",
+      "sequence_create_mutant_library",
+      "sequence_dataset_stats",
+      "sequence_detect_mutations",
+      "sequence_detect_mutations_between_entities",
+      "sequence_export_dataset",
+      "sequence_export_entity",
+      "sequence_find_best_match",
+      "sequence_find_conserved_regions",
+      "sequence_find_conserved_regions_in_dataset",
+      "sequence_save_sequences",
+      "translate_sequence"
+    ],
+    "ligand": [
+      "ligand_calculate_molecular_properties",
+      "ligand_compute_interactions",
+      "ligand_dataset_stats",
+      "ligand_import_sdf",
+      "ligand_import_smiles_structures",
+      "ligand_modify_smiles",
+      "ligand_record_interactions",
+      "ligand_register_smiles",
+      "ligand_smiles_to_inchi"
+    ],
+    "grn": [
+      "assign_grn_to_dataset",
+      "assign_grn_to_sequences",
+      "grn_align_dataset_to_reference",
+      "grn_align_sequences_to_reference",
+      "grn_compare_conservation",
+      "grn_create_table",
+      "grn_extract_sequences_from_dataset",
+      "grn_extract_sequences_from_structures",
+      "grn_get_config",
+      "grn_get_coverage_stats",
+      "grn_query_entity",
+      "grn_query_position"
+    ]
+  }
+}

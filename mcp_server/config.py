@@ -13,14 +13,73 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class LLMSafeLimits:
+    """Limits for LLM-safe data returns to prevent context flooding."""
+
+    # Sequence limits
+    max_sequence_preview_chars: int = 100
+    max_sequences_in_response: int = 10
+
+    # Structure limits
+    max_atom_preview_rows: int = 10
+    max_structure_summaries: int = 20
+
+    # Table/property limits
+    max_table_preview_rows: int = 5
+    max_table_columns_shown: int = 15
+
+    # GRN limits
+    max_grn_positions_shown: int = 20
+    max_grn_sequences_shown: int = 10
+
+    # Embedding limits (vectors should NEVER be returned)
+    max_embedding_dimensions_shown: int = 0  # Always 0 - never show vectors
+
+    # Ligand limits (SMILES are small, OK to include)
+    max_ligands_in_response: int = 25
+
+    # General limits
+    max_list_items: int = 25
+    max_preview_chars: int = 200
+    max_response_bytes: int = 50_000  # ~50KB max per response
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "max_sequence_preview_chars": self.max_sequence_preview_chars,
+            "max_sequences_in_response": self.max_sequences_in_response,
+            "max_atom_preview_rows": self.max_atom_preview_rows,
+            "max_structure_summaries": self.max_structure_summaries,
+            "max_table_preview_rows": self.max_table_preview_rows,
+            "max_table_columns_shown": self.max_table_columns_shown,
+            "max_grn_positions_shown": self.max_grn_positions_shown,
+            "max_grn_sequences_shown": self.max_grn_sequences_shown,
+            "max_embedding_dimensions_shown": self.max_embedding_dimensions_shown,
+            "max_ligands_in_response": self.max_ligands_in_response,
+            "max_list_items": self.max_list_items,
+            "max_preview_chars": self.max_preview_chars,
+            "max_response_bytes": self.max_response_bytes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LLMSafeLimits":
+        """Create from dictionary."""
+        return cls(**{k: v for k, v in data.items() if hasattr(cls, k)})
+
+
+@dataclass
 class ServerConfig:
     """Server configuration with smart defaults."""
-    
+
     # Data management
     data_root: Optional[Path] = None
     cache_enabled: bool = True
     max_memory_mb: int = 4096
-    
+
+    # LLM safety settings
+    llm_safe_mode: bool = True  # When True, tools return summaries only, not raw data
+    llm_limits: LLMSafeLimits = field(default_factory=LLMSafeLimits)
+
     # Processor defaults
     processor_defaults: Dict[str, Dict[str, Any]] = field(default_factory=lambda: {
         "structure": {
@@ -35,10 +94,11 @@ class ServerConfig:
             "min_sequence_identity": 0.25
         }
     })
-    
+
     # Server settings
     debug: bool = False
     log_level: str = "INFO"
+    tool_catalog_path: Optional[Path] = None
 
     def __post_init__(self):
         """Resolve data root and load any config files."""
@@ -51,6 +111,11 @@ class ServerConfig:
         config_file = self.data_root / "mcp_server_config.json"
         if config_file.exists():
             self._load_from_file(config_file)
+
+        if self.tool_catalog_path is None:
+            self.tool_catalog_path = self.default_tool_catalog_path()
+        else:
+            self.tool_catalog_path = self._normalize_path(self.tool_catalog_path)
 
     def _resolve_data_root(self) -> Path:
         """Resolve data directory with fallback chain."""
@@ -74,6 +139,13 @@ class ServerConfig:
             return candidate.absolute()
 
     @staticmethod
+    def default_tool_catalog_path() -> Path:
+        """Return default location for the exported tool catalog."""
+
+        repo_root = Path(__file__).resolve().parent.parent
+        return repo_root / "tool_catalog.json"
+
+    @staticmethod
     def _normalize_path(path: Union[str, Path]) -> Path:
         """Convert provided path to an absolute, user-expanded Path."""
 
@@ -95,7 +167,7 @@ class ServerConfig:
         try:
             with open(config_path, 'r') as f:
                 config_dict = json.load(f)
-                
+
             # Update configuration
             if "data_root" in config_dict:
                 self.set_data_root(config_dict["data_root"])
@@ -109,7 +181,14 @@ class ServerConfig:
                 self.debug = config_dict["debug"]
             if "log_level" in config_dict:
                 self.log_level = config_dict["log_level"]
-                
+            if "tool_catalog_path" in config_dict:
+                self.tool_catalog_path = self._normalize_path(config_dict["tool_catalog_path"])
+            # LLM safety settings
+            if "llm_safe_mode" in config_dict:
+                self.llm_safe_mode = config_dict["llm_safe_mode"]
+            if "llm_limits" in config_dict:
+                self.llm_limits = LLMSafeLimits.from_dict(config_dict["llm_limits"])
+
         except Exception as e:
             print(f"Warning: Failed to load config file: {e}")
     
@@ -117,16 +196,19 @@ class ServerConfig:
         """Save current configuration to file."""
         if config_path is None:
             config_path = self.data_root / "mcp_server_config.json"
-            
+
         config_dict = {
             "data_root": str(self.data_root),
             "cache_enabled": self.cache_enabled,
             "max_memory_mb": self.max_memory_mb,
             "processor_defaults": self.processor_defaults,
             "debug": self.debug,
-            "log_level": self.log_level
+            "log_level": self.log_level,
+            "tool_catalog_path": str(self.tool_catalog_path) if self.tool_catalog_path else None,
+            "llm_safe_mode": self.llm_safe_mode,
+            "llm_limits": self.llm_limits.to_dict(),
         }
-        
+
         with open(config_path, 'w') as f:
             json.dump(config_dict, f, indent=2)
     

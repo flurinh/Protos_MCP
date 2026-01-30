@@ -6,9 +6,12 @@ common functionality like error handling, response formatting, and
 processor access.
 """
 
-from typing import Dict, Any, Optional, List, Iterable
+from typing import Dict, Any, Optional, List, Iterable, Callable, TypeVar
 from abc import ABC
+from contextlib import contextmanager
+from functools import wraps
 import inspect
+import time
 import traceback
 
 from ..core.protos_manager import ProtosManager
@@ -16,6 +19,88 @@ from ..core.processor_factory import ProcessorFactory
 from ..core.exceptions import ProtosMCPError, InvalidInputError
 from ..core.session import SessionState
 from ..core.tool_catalog import ToolCatalog
+from ..core.logging_config import get_logger, log_tool_call
+from ..core.response import (
+    DataSummary,
+    LLMResponse,
+    check_payload_size,
+    safe_response,
+    truncate_list,
+)
+from ..config import LLMSafeLimits
+
+logger = get_logger("tools")
+
+# Type variable for decorator
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+@contextmanager
+def track_execution_time():
+    """Context manager to track execution time in milliseconds."""
+    start = time.perf_counter()
+    result = {"execution_time_ms": None}
+    try:
+        yield result
+    finally:
+        result["execution_time_ms"] = int((time.perf_counter() - start) * 1000)
+
+
+def with_performance_tracking(tool_name: Optional[str] = None) -> Callable[[F], F]:
+    """Decorator that adds execution time tracking to tool responses.
+
+    Adds 'execution_time_ms' to the response metadata if the response is a dict.
+    Also logs the tool call with timing information.
+
+    Args:
+        tool_name: Optional tool name for logging. If not provided, uses function name.
+
+    Usage:
+        @server.tool()
+        @with_performance_tracking()
+        def my_tool(ctx, param: str) -> Dict:
+            ...
+    """
+    def decorator(func: F) -> F:
+        name = tool_name or func.__name__
+
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            start = time.perf_counter()
+            result = None
+            error_msg = None
+            try:
+                result = func(*args, **kwargs)
+
+                # Add timing to result if it's a dict (before returning)
+                elapsed_ms = int((time.perf_counter() - start) * 1000)
+                if isinstance(result, dict):
+                    result.setdefault("metadata", {})
+                    result["metadata"]["execution_time_ms"] = elapsed_ms
+
+                # Log successful call
+                log_tool_call(
+                    tool_name=name,
+                    result_status="success",
+                    execution_time_ms=elapsed_ms,
+                )
+
+                return result
+            except Exception as e:
+                elapsed_ms = int((time.perf_counter() - start) * 1000)
+                error_msg = str(e)
+
+                # Log failed call
+                log_tool_call(
+                    tool_name=name,
+                    result_status="error",
+                    execution_time_ms=elapsed_ms,
+                    error=error_msg,
+                )
+                raise
+
+        return wrapper  # type: ignore
+    return decorator
 
 
 class BaseTool(ABC):
@@ -289,11 +374,147 @@ class BaseTool(ABC):
     def register(self, server):
         """
         Register tool methods with MCP server.
-        
+
         Should be overridden by subclasses to register their specific tools.
-        
+
         Args:
             server: FastMCP server instance
         """
         # To be implemented by subclasses
         pass
+
+    # LLM-safe response helpers --------------------------------------------
+
+    @property
+    def llm_safe_mode(self) -> bool:
+        """Check if LLM-safe mode is enabled."""
+        return self.context.config.llm_safe_mode
+
+    @property
+    def llm_limits(self) -> LLMSafeLimits:
+        """Get the configured LLM safety limits."""
+        return self.context.config.llm_limits
+
+    def should_include_data(self, data_type: str) -> bool:
+        """
+        Check if raw data should be included in response.
+
+        In LLM-safe mode, only ligands/SMILES are included.
+        In workflow mode (llm_safe_mode=False), all data is included.
+
+        Args:
+            data_type: Type of data (sequence, structure, embedding, ligand, etc.)
+
+        Returns:
+            True if raw data should be included
+        """
+        if not self.llm_safe_mode:
+            return True  # Workflow mode - include everything
+
+        # In LLM-safe mode, only ligands are small enough to include
+        return data_type in ("ligand", "smiles", "molecule")
+
+    def format_llm_response(
+        self,
+        summary: DataSummary,
+        context_handle: Optional[str] = None,
+        *,
+        message: Optional[str] = None,
+        include_data: Optional[Any] = None,
+    ) -> Dict:
+        """
+        Format an LLM-safe success response.
+
+        Args:
+            summary: DataSummary describing the loaded data
+            context_handle: Handle for retrieving full data later
+            message: Optional success message
+            include_data: Optional small data to include (only for ligands)
+
+        Returns:
+            Standardized success response
+        """
+        response = LLMResponse(
+            success=True,
+            summary=summary,
+            context_handle=context_handle,
+            message=message,
+            data=include_data,
+        )
+        return response.to_dict()
+
+    def format_safe_success(
+        self,
+        data: Any,
+        metadata: Optional[Dict] = None,
+        message: Optional[str] = None,
+        max_bytes: Optional[int] = None,
+    ) -> Dict:
+        """
+        Format success response with automatic size checking.
+
+        If response exceeds max_bytes, it's truncated with a warning.
+
+        Args:
+            data: Main response data
+            metadata: Optional metadata
+            message: Optional success message
+            max_bytes: Max response size (default from config)
+
+        Returns:
+            Standardized success response, possibly truncated
+        """
+        response = self.format_success(data, metadata, message)
+
+        limit = max_bytes or self.llm_limits.max_response_bytes
+        return safe_response(response, limit)
+
+    def truncate_entity_list(
+        self,
+        entities: List[Any],
+        max_items: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Truncate an entity list for LLM-safe return.
+
+        Args:
+            entities: List of entities to truncate
+            max_items: Max items to return (default from config)
+
+        Returns:
+            Dict with items, count, truncated flag
+        """
+        limit = max_items or self.llm_limits.max_list_items
+        return truncate_list(entities, limit)
+
+    def get_sequence_preview(
+        self,
+        sequence: str,
+        max_chars: Optional[int] = None,
+    ) -> str:
+        """
+        Get a truncated preview of a sequence.
+
+        Args:
+            sequence: Full sequence string
+            max_chars: Max characters (default from config)
+
+        Returns:
+            Truncated sequence with ... if needed
+        """
+        limit = max_chars or self.llm_limits.max_sequence_preview_chars
+        if len(sequence) <= limit:
+            return sequence
+        return sequence[:limit] + "..."
+
+    def check_response_size(self, data: Any) -> tuple[bool, int]:
+        """
+        Check if response data is within size limits.
+
+        Args:
+            data: Response data to check
+
+        Returns:
+            Tuple of (is_within_limit, size_in_bytes)
+        """
+        return check_payload_size(data, self.llm_limits.max_response_bytes)

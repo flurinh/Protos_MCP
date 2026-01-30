@@ -246,6 +246,34 @@ workflows:
       - model_prepare_batch  # planned wrapper
       - model_prepare_mutation_screen  # planned wrapper
 
+  - script: workflows/model_lambda_via_tools.py
+    instructions: |
+      1. Register the GPCR demo sequences via MCP tools and confirm the dataset entities are available for GRN annotation.
+      2. Stage the packaged Lambda configuration files with `model_lambda_prepare_resources`.
+      3. Invoke `model_lambda_run` to assemble the Lambda submission artifacts (or inline predictions when dependencies exist) and report the run metadata.
+      4. Preview any resulting property table rows when the runtime executes locally; otherwise summarise the generated job command and working directory for schedulers.
+    tools:
+      - config_get_data_root
+      - config_initialize_data
+      - sequence_register_records
+      - dataset_entities
+      - model_lambda_prepare_resources
+      - model_lambda_run
+      - load_property_rows
+
+  - script: workflows/smiles_docking_via_tools.py
+    instructions: |
+      1. Import the SMILES demo ligands into the managed structure registry and verify the resulting entities.
+      2. Export ligand and receptor artifacts via MCP so downstream schedulers have reproducible inputs.
+      3. Prepare a Uni-Dock submission job with `model_prepare_job`, capturing the command, working directory, and packaged artifacts for execution on remote GPU resources.
+    tools:
+      - config_get_data_root
+      - config_initialize_data
+      - ligand_import_smiles_structures
+      - structure_export_entity
+      - download_entity
+      - model_prepare_job
+
 notes:
   - "Replace placeholders (e.g., <candidate_chain_ids>, <property_rows>) with concrete values gathered during the session."
   - "When a workflow cites a future tool, either script the action directly in Python or prioritise adding the missing MCP wrapper."

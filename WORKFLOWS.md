@@ -13,12 +13,16 @@ This reference explains how the Protos processors, datasets, and MCP tools fit t
 - Relationships are captured when processors derive new entities (e.g., sequence extracted from a structure, ligand interactions stored as properties) so MCP agents can enumerate related resources without guessing paths.
 - Dataset metadata should include provenance (`source`, `created_by`, `parameters`) because tools like `dataset_info` surface those fields verbatim to clients.
 
+## Tool Catalog
+- Every MCP server run now emits a machine-readable `tool_catalog.json` (path defaults to `<repo>/tool_catalog.json`, configurable via `ServerConfig.tool_catalog_path`).
+- `ProtoGuideTools.guide_tool_help` and other docs read from this catalog so the published tool inventory always matches the registered code.
+- Keep curated snippets (for example `mcp_server/tool_usage.yaml`) focused on narrative examples; the JSON catalog is the authoritative list of tool names, parameters, and tags.
+
 ## GRN Annotation Pipeline
-1. **Reference Discovery** – load reference tables (`load_grn_reference_table`) and retrieve GRN configuration for the target protein family.
-2. **Sequence Extraction** – pull sequences from entity or structure datasets (`grn_extract_sequences_from_dataset` or `grn_extract_sequences_from_structures`).
-3. **Alignment** – match query sequences to the reference via MMseqs2 or BLOSUM62 (`grn_align_dataset_to_reference` or `grn_align_sequences_to_reference`).
-4. **Annotation & Expansion** – assign GRN positions (`assign_grn_to_dataset`/`assign_grn_to_sequences`) and expand coverage (loop handling, gap filling).
-5. **Recording & QA** – persist GRN tables (`record_grn_table`/`grn_create_table`), then compute coverage or conservation statistics (`grn_get_coverage_stats`, `grn_compare_conservation`).
+1. **Download target structures** – `download_entities([...], processor_type='structure', dataset_name='gpcr_structures')` keeps provenance explicit.
+2. **Run the composite workflow** – `structure_prepare_grn_annotations(structure_ids=[...], reference_table='gpcrdb_ref', protein_family='gpcr_a', alignment_threshold=0.75, chain_dataset_prefix='grn_chain_dataset')` extracts chains, filters by similarity, aligns to the reference, writes a filtered sequence dataset, records the GRN table, and maps annotations back onto the structures.
+3. **Inspect results** – `load_sequence_dataset` surfaces the filtered chains, `load_grn_table` previews the saved numbering table, and `structure_apply_grn_annotations` can remap the table to additional structures as needed.
+4. **Export** – `structure_export_entity` outputs GRN-labelled frames for visualization, modeling, or downstream property logging.
 
 ## Model Integration Workflows
 - `ModelManager` mediates between processors and external/in-process models using declarative model cards (input/output specs plus execution metadata).
@@ -187,7 +191,7 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `structure_align_to_reference` | Align structures via `StructureProcessor.align_and_record` and surface registry artifacts. | `analysis/structure.py` |
 | `structure_annotate_entities` | Apply chain-level and optional structure-level annotations. | `analysis/structure.py` |
 | `structure_apply_grn_annotations` | Map GRN annotations from a table onto structure residues. | `analysis/structure.py` |
-| `structure_prepare_grn_annotations` | Extract chains, filter/align them, annotate with GRN, and project annotations back onto the provided structures in one call. | `analysis/structure.py` |
+| `structure_prepare_grn_annotations` | Extract chains, filter/align them, annotate with GRN, and project annotations back onto the provided structures in one call. This is the primary entry point for the updated GRN workflows. | `analysis/structure.py` |
 | `structure_collect_chain_sequences` | Collect per-chain sequences for one or more structures. | `analysis/structure.py` |
 | `structure_compute_embedding_similarity` | Compute per-residue embedding similarity relative to a reference chain. | `analysis/structure.py` |
 | `structure_compute_water_networks` | Analyze water-mediated residue networks for the given structures. | `analysis/structure.py` |
@@ -197,6 +201,40 @@ The following tables enumerate every MCP tool currently registered. Grouping mat
 | `structure_filter_dataset` | Filter structures in a dataset by column values and optionally register the results. | `analysis/structure.py` |
 | `structure_list_dataset_sequences` | List sequences related to each structure in a dataset. | `analysis/structure.py` |
 | `superimpose_structures` | Superimpose one structure onto another and save the result. This tool aligns a mobile structure onto a reference structure and saves the transformed coordinates as a new entity. Args: reference_pdb: PDB ID of the reference structure mobile_pdb: PDB ID of the structure to superimpose output_name: Name for the superimposed structure entity atom_selection: Atoms to use for alignment ("CA", "backbone", "all") chain_selection: Specific chain to align, or None for all Returns: Dictionary with superposition results | `analysis/structure.py` |
+
+## Featured MCP Workflows (mirroring `workflows/` scripts)
+
+### GRN-Centric Structure Prep (`workflows/structure_grn_annotation_via_tools.py`)
+1. `config_initialize_data(reinstall_reference=True, refresh_registry=True)` – ensure registry and references are in sync.
+2. `download_entities(identifiers=['3sn6','5d5a','6b73'], processor_type='structure', dataset_name='grn_annotation_structures')` – stage the receptors.
+3. `structure_prepare_grn_annotations(structure_ids=[...], reference_table='gpcrdb_ref', protein_family='gpcr_a', chain_dataset_prefix='grn_chain_dataset')` – extract/align/filter chains, emit filtered datasets, GRN tables, and annotated structures.
+4. `load_sequence_dataset(dataset_name='grn_chain_dataset_<pdb>', include_sequences=False)` – confirm which chains passed the filter.
+5. `load_grn_table(table_name='grn_chain_dataset_<pdb>_grn')` and `structure_export_entity` – preview numbering tables, export labelled structures.
+
+### GRN-Aware Ligand Analysis & Boltz Job (`protos/test_ligand_workflow.py` & `workflows/test_ligand_workflow.py`)
+1. `download_entities(identifiers=['5d5a'], processor_type='structure', dataset_name='ligand_workflow_structures')`.
+2. `structure_prepare_grn_annotations(structure_ids=['5d5a'], reference_table='gpcrdb_ref', protein_family='gpcr_a', chain_dataset_prefix='ligand_workflow_chains')`.
+3. `extract_ligands_from_structure(pdb_id='5d5a', exclude_common=True, min_atoms=4)` to enumerate ligands.
+4. `ligand_compute_interactions(structure_id='5d5a', ligand_names=['CAU'], distance_cutoff=4.0)` for residue contacts and summaries.
+5. `record_property_rows(dataset_name='5d5a_ligand_contacts', rows=<from step 4>, allow_create=True)` to persist GRN-aware contact tables.
+6. `save_entity(name='5d5a_CAU_A', format='molecule', data={'smiles': '...'}, metadata={'source_structure': '5d5a'})` or `ligand_register_smiles` to register the ligand descriptor.
+7. `model_prepare_job(model_name='boltz2', inputs={'sequence_dataset': 'ligand_workflow_chains_5d5a', 'entity': '5d5a_chain_A'}, config={'output_name': '5d5a_A_CAU_dock', 'ligand': {'id': 'CAU', 'smiles': '...'}})` to emit a Boltz submission bundle.
+
+### Sequence-to-Property Alignment (`workflows/property_workflow_via_tools.py`)
+1. `sequence_register_records(records=[...], dataset_name='gpcr_sequences', overwrite=True, metadata={'source': 'property_workflow'})` – import curated sequences.
+2. `load_sequence_dataset(dataset_name='gpcr_sequences', include_sequences=True)` – preview.
+3. `align_sequences_by_id(entity1='<target_chain>', entity2='<reference_chain>', alignment_method='blosum62')` – capture scores per chain.
+4. `record_property_rows(dataset_name='gpcr_sequence_alignment', rows=<alignment summaries>, allow_create=True)` – persist metrics.
+5. `load_property_rows(dataset_name='gpcr_sequence_alignment', entity_name='<target_chain>', scope_format='sequence')` – report back to the agent/user.
+
+### SMILES-to-Docking Prep (`workflows/smiles_docking_via_tools.py`)
+1. `ligand_import_smiles_structures(smiles_map={...}, dataset_name='smiles_docking_demo', generate_3d=True)` – build ligand conformers.
+2. `structure_export_entity(structure_id='smiles_docking_demo_<ligand>', format='sdf', output_path=..., overwrite=True)` – export ligand files.
+3. `structure_export_entity(structure_id='5d5a', format='pdb', output_path=..., overwrite=True)` – export the receptor.
+4. `model_prepare_job(model_name='unidock', inputs={'receptor_pdb': <pdb path>, 'ligand_file': <sdf path>}, config={'search_mode': 'fast', 'num_modes': 5})` – generate docking submissions.
+5. Optional: `record_property_rows(dataset_name='smiles_docking_runs', rows=[...])` – log metadata about each docking prep.
+
+Each of these flows has a peer in `mcp_workflow_recipes.yaml`, the `workflows/` directory, and the MCP guide (`guide_workflow_example`). Refer back to the scripts for concrete parameter values when authoring new recipes or regression tests.
 
 ## Cross-Processor Workflows
 ### Model Manager

@@ -7,6 +7,13 @@ from pathlib import Path
 
 import pandas as pd
 
+from protos.datasets import (
+    register_chembl_ligand_dataset as _register_chembl_ligand_dataset,
+    register_gpcr_property_dataset as _register_gpcr_property_dataset,
+    register_gpcr_sequence_dataset as _register_gpcr_sequence_dataset,
+    register_rhodopsin_structure_dataset as _register_rhodopsin_structure_dataset,
+)
+
 from ..base import BaseTool
 from ...core.exceptions import DatasetNotFoundError
 
@@ -1091,6 +1098,17 @@ class DatasetOperationTools(BaseTool):
                 elif isinstance(data, dict):
                     summary.update({"preview_keys": list(list(data.keys())[:10])})
                 return self.format_success(summary)
+
+            # In LLM-safe mode, never return full dataset data (can be massive)
+            if self.llm_safe_mode:
+                entity_names = manager.get_dataset_entities(name)
+                return self.format_success({
+                    "dataset_name": name,
+                    "processor_type": processor_type,
+                    "entity_count": len(entity_names),
+                    "entities_preview": entity_names[:20],
+                    "note": "Full data not returned in LLM-safe mode. Data is loaded in Protos context.",
+                })
 
             serializable: Any
             if isinstance(data, pd.DataFrame):

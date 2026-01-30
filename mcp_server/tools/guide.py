@@ -56,6 +56,7 @@ class ProtoGuideTools(BaseTool):
                 "best_practices": self._get_best_practices_guide(),
                 "tools": self._get_tool_catalog_guide(),
                 "grn_annotation": self._get_grn_annotation_guide(),
+                "llm_safe_mode": self._get_llm_safe_mode_guide(),
             }
 
             if topic and topic in guides:
@@ -177,25 +178,23 @@ class ProtoGuideTools(BaseTool):
 
         @server.tool()
         def guide_tool_help(ctx, tool_name: Optional[str] = None) -> Dict:
-            """Return usage guidance for a specific MCP tool from tool_usage.yaml."""
+            """Return usage guidance for registered MCP tools."""
 
-            usage = self._load_tool_usage()
-            if not usage:
-                return self.format_error(
-                    "No tool usage metadata available",
-                    "Populate mcp_server/tool_usage.yaml to enable this helper.",
-                )
+            catalog_dict = self.tool_catalog.to_dict()
+            tools = {entry["name"]: entry for entry in catalog_dict.get("tools", [])}
 
             if not tool_name:
-                return self.format_success({"tools": sorted(usage.keys())})
+                return self.format_success({
+                    "tools": sorted(tools.keys()),
+                    "catalog_path": str(self.context.config.tool_catalog_path),
+                })
 
-            lookup = tool_name.lower()
-            key = next((name for name in usage if name.lower() == lookup), None)
-
-            if key is None:
-                matches = [name for name in usage if lookup in name.lower()]
+            normalized = tool_name.lower()
+            entry = self.tool_catalog.resolve(tool_name)
+            if entry is None:
+                matches = [name for name in tools if normalized in name.lower()]
                 suggestion = (
-                    f"Available tools: {', '.join(sorted(usage.keys()))}"
+                    f"Available tools: {', '.join(sorted(tools))}"
                     if not matches
                     else f"Did you mean: {', '.join(matches)}?"
                 )
@@ -204,16 +203,22 @@ class ProtoGuideTools(BaseTool):
                     suggestion,
                 )
 
-            entry = usage.get(key, {})
-            payload = {"tool": key, **entry}
+            payload = entry.to_dict()
+            payload["catalog_path"] = str(self.context.config.tool_catalog_path)
+
+            usage_notes = self._load_tool_usage()
+            extras = usage_notes.get(entry.name)
+            if extras:
+                payload["usage_notes"] = extras
+
             return self.format_success(payload)
 
         self.register_tool_metadata(
             function=guide_tool_help,
             name="guide_tool_help",
-            description="Surface enriched usage notes for a tool (parsed from tool_usage.yaml).",
+            description="Surface catalog metadata (and optional usage notes) for any registered tool.",
             parameters=[{"name": "tool_name", "type": "str", "optional": True}],
-            returns={"fields": ["summary", "workflows"]},
+            returns={"fields": ["description", "parameters", "catalog_path"]},
             tags=["guide", "tools"],
         )
 
@@ -288,11 +293,18 @@ class ProtoGuideTools(BaseTool):
                         "structure_graph_generate_from_dataset",
                         "structure_graph_load_entity",
                     ],
+                    "binding_site": [
+                        "structure_get_binding_site_residues",
+                        "structure_analyze_binding_pocket",
+                        "structure_analyze_ligand_interactions",
+                        "structure_compare_ligand_binding_sites",
+                    ],
                     "export": [
                         "structure_export_entity",
                         "structure_export_dataset",
                     ],
                     "loaders": ["download_entity", "download_entities", "download_sources"],
+                    "note": "Structure DataFrames never exposed; use analysis/binding_site tools for specific queries.",
                 },
                 "sequence": {
                     "handles": "Protein / DNA / RNA sequences",
@@ -332,14 +344,22 @@ class ProtoGuideTools(BaseTool):
                     "analysis": [
                         "ligand_compute_interactions",
                         "structure_analyze_ligand_interactions",
-                        "analyze_structure_ligand_environment",
                         "ligand_calculate_molecular_properties",
+                        "search_similar_ligands",
+                        "filter_drug_like_ligands",
                     ],
                     "export": [
                         "ligand_register_smiles",
                         "ligand_record_interactions",
+                        "ligand_import_smiles_structures",
+                        "ligand_import_sdf",
                     ],
-                    "loaders": ["extract_ligands_from_structure", "get_protein_ligands_from_chembl"],
+                    "loaders": [
+                        "extract_ligands_from_structure",
+                        "get_protein_ligands_from_chembl",
+                        "import_sdf_to_protos",
+                    ],
+                    "note": "Small molecule data (SMILES, properties) is always returned in full - compact format.",
                 },
                 "embedding": {
                     "handles": "Sequence embeddings (ESM, ANKH, etc.)",
@@ -366,11 +386,17 @@ class ProtoGuideTools(BaseTool):
                         "grn_annotate_sequences",
                         "assign_grn_to_dataset",
                         "get_grn_table_stats",
+                        "grn_compare_conservation",
+                    ],
+                    "query": [
+                        "grn_query_entity",
+                        "grn_query_position",
                     ],
                     "export": [
                         "record_grn_table",
                     ],
                     "loaders": [],
+                    "note": "Use query tools to inspect specific entities or positions without loading full tables.",
                 },
                 "property": {
                     "handles": "Tabular properties / annotations",
@@ -509,16 +535,74 @@ class ProtoGuideTools(BaseTool):
                         "GRN table registered under data/grn/tables",
                         "Annotation counts per structure/chain",
                     ],
-                    "follow_up": "Call load_grn_table for previews or structure_apply_grn_annotations if you need to re-map without rerunning the full workflow.",
+                    "follow_up": "Use grn_query_entity and grn_query_position to inspect results without loading full tables.",
                 }
+            },
+            "query_tools": {
+                "grn_query_entity": {
+                    "purpose": "Get GRN annotations for a single entity (e.g., 'ADRB2_HUMAN').",
+                    "use_case": "Inspect what residues are assigned to each GRN position for one sequence.",
+                    "example": "grn_query_entity(grn_table='gpcr_grn', entity_id='ADRB2_HUMAN', positions=['1.50', '3.50'])",
+                },
+                "grn_query_position": {
+                    "purpose": "Get amino acid distribution at specific GRN positions across all entities.",
+                    "use_case": "Conservation analysis - which AAs appear at functionally important positions.",
+                    "example": "grn_query_position(grn_table='gpcr_grn', positions=['1.50', '2.50', '3.50', '7.50'])",
+                },
             },
             "tips": [
                 "Ensure structures are downloaded via download_entities before running GRN steps.",
                 "Lower alignment_threshold (e.g., 0.6) if no chains pass the similarity filter.",
                 "When orchestrating manually, keep the chain entity names (e.g., '3sn6_chain_A') consistent so they match GRN table rows.",
+                "Use grn_query_entity to inspect individual sequences; use grn_query_position for conservation analysis.",
+                "sequence_annotate_with_grn returns statistics only; use query tools for detailed inspection.",
             ],
         }
-    
+
+    def _get_llm_safe_mode_guide(self) -> Dict[str, Any]:
+        """Guide for understanding LLM-safe mode data output patterns."""
+
+        return {
+            "title": "LLM-Safe Mode - Data Output Patterns",
+            "description": "Tools operate in LLM-safe mode by default, returning summaries and statistics instead of raw data to prevent context flooding.",
+            "core_principle": "Defaults are safe; explicit requests are honored.",
+            "what_is_restricted": {
+                "structure_dataframes": "Never exposed directly - use statistics and atom previews instead",
+                "full_sequences": "Return length and preview; use include_sequence=True when needed",
+                "raw_embeddings": "Never returned - use similarity tools for analysis",
+                "large_grn_tables": "Return statistics; use grn_query_* tools for inspection",
+                "alignment_text": "Return scores; use include_alignment=True when needed",
+            },
+            "what_is_unrestricted": {
+                "binding_pocket_analysis": "Full residue data returned - essential for reasoning",
+                "ligand_interactions": "Full contact data returned - needed for drug design",
+                "small_molecule_data": "SMILES, properties always included - compact format",
+                "statistics_and_counts": "Always included in responses",
+                "error_messages": "Always detailed with suggestions",
+            },
+            "how_to_get_full_data": {
+                "sequences": "load_sequence(id, include_sequence=True)",
+                "alignments": "align_sequences_by_id(e1, e2, include_alignment=True)",
+                "datasets": "load_sequence_dataset(name, include_sequences=True)",
+                "grn_details": "Use grn_query_entity() or grn_query_position()",
+            },
+            "query_tool_pattern": {
+                "description": "Instead of loading entire tables, use targeted query tools",
+                "examples": [
+                    "grn_query_entity(table, entity_id) - Get one entity's GRN annotations",
+                    "grn_query_position(table, positions) - Get AA distribution at specific GRNs",
+                    "get_entity_property_values(table, entity) - Get properties for one entity",
+                ],
+            },
+            "tips": [
+                "Statistics and metadata are always returned - use them to decide if you need full data",
+                "Structure DataFrames are never exposed - use analysis tools instead",
+                "When you need specific data, request it explicitly with include_* flags",
+                "For GRN tables, use query tools rather than loading entire tables",
+                "Binding pocket and ligand interaction data is always detailed (needed for reasoning)",
+            ],
+        }
+
     def _get_workflows_guide(self) -> Dict:
         """Get workflows guide content."""
         return {
@@ -527,25 +611,25 @@ class ProtoGuideTools(BaseTool):
                 "structure_based": {
                     "description": "Workflows starting from 3D structures",
                     "examples": [
-                        "download_entities → load_structure_dataset → structure_filter_dataset → structure_collect_chain_sequences",
-                        "structure_align_to_reference → structure_apply_grn_annotations → structure_export_dataset",
-                        "extract_ligands_from_structure → ligand_compute_interactions → ligand_record_interactions",
+                        "download_entities → structure_prepare_grn_annotations → load_grn_table",
+                        "structure_prepare_grn_annotations → structure_export_entity → model_prepare_job",
+                        "extract_ligands_from_structure → ligand_compute_interactions → record_property_rows",
                     ]
                 },
                 "sequence_based": {
                     "description": "Workflows starting from sequences",
                     "examples": [
-                        "sequence_download → load_sequence_dataset → sequence_align_to_reference",
-                        "sequence_align_mmseqs → sequence_compute_conservation → sequence_export_dataset",
-                        "sequence_annotate_with_grn → load_grn_table → structure_apply_grn_annotations",
+                        "sequence_register_records → load_sequence_dataset → align_sequences_by_id",
+                        "sequence_annotate_with_grn → record_property_rows → load_property_rows",
+                        "sequence_download → sequence_align_mmseqs → sequence_export_dataset",
                     ]
                 },
                 "integrated": {
                     "description": "Workflows combining multiple data types",
                     "examples": [
-                        "structure_collect_chain_sequences → sequence_save_sequences → embedding_generate → embedding_cosine_similarity",
-                        "structure_graph_generate_from_dataset → structure_graph_load_entity → property_record_table",
-                        "ligand_register_smiles → load_ligand_dataset → analyze_ligand_binding_site",
+                        "structure_prepare_grn_annotations → ligand_compute_interactions → model_prepare_job",
+                        "ligand_register_smiles → ligand_import_smiles_structures → model_prepare_job",
+                        "download_entities → sequence_register_records → record_property_rows",
                     ]
                 }
             },
@@ -626,40 +710,49 @@ class ProtoGuideTools(BaseTool):
         return [
             {
                 "step": 1,
-                "description": "Download structures of interest",
-                "tool": "download_entity",
-                "params": {"entity_id": "1ubq", "source": "pdb", "processor_type": "structure"},
-                "note": "Can also use AlphaFold with source='alphafold'"
+                "description": "Initialize the data root and refresh reference assets",
+                "tool": "config_initialize_data",
+                "params": {"reinstall_reference": True, "refresh_registry": True}
             },
             {
                 "step": 2,
-                "description": "Create a dataset for analysis",
-                "tool": "create_dataset",
-                "params": {"name": "my_structures", "entities": ["1ubq", "2ubq"], "processor_type": "structure"}
+                "description": "Download receptor structures into a dataset",
+                "tool": "download_entities",
+                "params": {
+                    "identifiers": ["5d5a", "6b73"],
+                    "processor_type": "structure",
+                    "dataset_name": "gpcr_structures",
+                    "create_dataset": True
+                }
             },
             {
                 "step": 3,
-                "description": "Load the dataset",
-                "tool": "load_dataset",
-                "params": {"name": "my_structures", "processor_type": "structure"}
+                "description": "Extract chains, align to GPCR references, and save GRN tables in one call",
+                "tool": "structure_prepare_grn_annotations",
+                "params": {
+                    "structure_ids": ["5d5a", "6b73"],
+                    "reference_table": "gpcrdb_ref",
+                    "protein_family": "gpcr_a",
+                    "alignment_threshold": 0.8
+                }
             },
             {
                 "step": 4,
-                "description": "Extract sequences from all chains",
-                "tool": "get_all_sequences_from_structure",
-                "params": {"pdb_id": "1ubq", "save_to_sequence": True}
+                "description": "Inspect the resulting datasets/table",
+                "tool": "load_grn_table",
+                "params": {"table_name": "gpcr_grn_demo"},
+                "note": "Pairs nicely with structure_apply_grn_annotations if you need to refresh existing entities."
             },
             {
                 "step": 5,
-                "description": "Calculate structural properties",
-                "tool": "calculate_structure_properties",
-                "params": {"pdb_id": "1ubq"}
-            },
-            {
-                "step": 6,
-                "description": "Align structures if multiple",
-                "tool": "align_protein_structures",
-                "params": {"reference_pdb": "1ubq", "mobile_pdb": "2ubq"}
+                "description": "Export a GRN-labelled structure for modeling",
+                "tool": "structure_export_entity",
+                "params": {
+                    "structure_id": "5d5a",
+                    "format": "pdb",
+                    "include_metadata": True,
+                    "overwrite": True
+                }
             }
         ]
     
@@ -668,46 +761,49 @@ class ProtoGuideTools(BaseTool):
         return [
             {
                 "step": 1,
-                "description": "Download GPCR structures",
-                "tool": "download_entity",
-                "params": {"entity_id": "5uen", "source": "pdb", "processor_type": "structure"},
-                "note": "Repeat for multiple GPCRs"
+                "description": "Download the target structures",
+                "tool": "download_entities",
+                "params": {
+                    "identifiers": ["3sn6", "5d5a", "6b73"],
+                    "processor_type": "structure",
+                    "dataset_name": "gpcr_structures",
+                    "create_dataset": True
+                }
             },
             {
                 "step": 2,
-                "description": "Create structure dataset",
-                "tool": "create_dataset",
-                "params": {"name": "gpcr_structures", "entities": ["5uen", "6ps0", "7wy5"], "processor_type": "structure"}
+                "description": "Run the combined chain extraction, alignment, and annotation workflow",
+                "tool": "structure_prepare_grn_annotations",
+                "params": {
+                    "structure_ids": ["3sn6", "5d5a", "6b73"],
+                    "reference_table": "gpcrdb_ref",
+                    "protein_family": "gpcr_a",
+                    "alignment_threshold": 0.75,
+                    "filtered_sequence_dataset": "gpcr_chain_filtered"
+                }
             },
             {
                 "step": 3,
-                "description": "Extract sequences from structures",
-                "tool": "extract_sequences_from_structures",
-                "params": {"dataset_name": "gpcr_structures"}
+                "description": "Inspect alignment/coverage summaries",
+                "tool": "load_sequence_dataset",
+                "params": {"dataset_name": "gpcr_chain_filtered", "include_sequences": False}
             },
             {
                 "step": 4,
-                "description": "Load GRN reference table",
-                "tool": "load_grn_reference_table",
-                "params": {"reference_name": "gpcrdb_ref"}
+                "description": "Load the stored GRN table for downstream reporting",
+                "tool": "load_grn_table",
+                "params": {"table_name": "gpcr_chain_filtered_grn"}
             },
             {
                 "step": 5,
-                "description": "Align sequences to reference",
-                "tool": "align_sequences_to_reference",
-                "params": {"sequences": "{from_step_3}", "reference_name": "gpcrdb_ref"}
-            },
-            {
-                "step": 6,
-                "description": "Assign GRN positions",
-                "tool": "assign_grn_to_sequences",
-                "params": {"alignment_results": "{from_step_5}", "family": "gpcr_a"}
-            },
-            {
-                "step": 7,
-                "description": "Create and save GRN table",
-                "tool": "create_grn_table",
-                "params": {"dataset_name": "gpcr_grn_analysis", "grn_data": "{from_step_6}"}
+                "description": "Map GRN labels back onto structures (for visualization/export)",
+                "tool": "structure_apply_grn_annotations",
+                "params": {
+                    "grn_table": "gpcr_chain_filtered_grn",
+                    "structures": ["3sn6", "5d5a", "6b73"],
+                    "column_name": "grn",
+                    "save_entities": True
+                }
             }
         ]
     
@@ -716,39 +812,76 @@ class ProtoGuideTools(BaseTool):
         return [
             {
                 "step": 1,
-                "description": "Download protein-ligand complex",
-                "tool": "download_entity",
-                "params": {"entity_id": "4djh", "source": "pdb", "processor_type": "structure"}
+                "description": "Download the receptor structure (or dataset)",
+                "tool": "download_entities",
+                "params": {
+                    "identifiers": ["5d5a"],
+                    "processor_type": "structure",
+                    "dataset_name": "ligand_workflow_structures"
+                }
             },
             {
                 "step": 2,
-                "description": "Extract all ligands",
-                "tool": "extract_ligands_from_structure",
-                "params": {"pdb_id": "4djh", "exclude_common": True}
+                "description": "Register chain sequences and annotate with GRNs",
+                "tool": "structure_prepare_grn_annotations",
+                "params": {
+                    "structure_ids": ["5d5a"],
+                    "reference_table": "gpcrdb_ref",
+                    "protein_family": "gpcr_a",
+                    "chain_dataset_prefix": "ligand_workflow_chains"
+                }
             },
             {
                 "step": 3,
-                "description": "Get binding site residues",
-                "tool": "structure_get_binding_site_residues",
-                "params": {"pdb_id": "4djh", "ligand_name": "0KE", "cutoff": 5.0}
+                "description": "List ligands and inspect their metadata",
+                "tool": "extract_ligands_from_structure",
+                "params": {"pdb_id": "5d5a", "exclude_common": True, "min_atoms": 4}
             },
             {
                 "step": 4,
-                "description": "Calculate molecular properties",
-                "tool": "ligand_calculate_molecular_properties",
-                "params": {"smiles": "CC1=CC=C(C=C1)C2=CC(=NN2C3=CC=C(C=C3)S(=O)(=O)N)C(F)(F)F"}
+                "description": "Compute residue-level interactions for the selected ligand",
+                "tool": "ligand_compute_interactions",
+                "params": {
+                    "structure_id": "5d5a",
+                    "ligand_names": ["CAU"],
+                    "distance_cutoff": 4.0
+                },
+                "note": "Returns a dataframe plus per-ligand summaries ready for property logging."
             },
             {
                 "step": 5,
-                "description": "Search for similar ligands",
-                "tool": "search_similar_ligands",
-                "params": {"query_smiles": "{from_step_4}", "dataset_name": "chembl_drugs", "threshold": 0.7}
+                "description": "Persist binding contacts as a property table",
+                "tool": "record_property_rows",
+                "params": {
+                    "dataset_name": "5d5a_ligand_contacts",
+                    "rows": "{from_step_4}",
+                    "allow_create": True
+                }
             },
             {
                 "step": 6,
-                "description": "Get bioactivity from ChEMBL",
-                "tool": "get_protein_ligands_from_chembl",
-                "params": {"target_id": "CHEMBL203", "min_pchembl": 6.0}
+                "description": "Register the ligand SMILES as a molecule entity",
+                "tool": "save_entity",
+                "params": {
+                    "name": "5d5a_CAU_A",
+                    "format": "molecule",
+                    "data": {"smiles": "CC(C)NC1=NC(=O)N(C=C1)C2=CN=C(N)N=C2N", "kind": "smiles_record"},
+                    "metadata": {"source_structure": "5d5a"}
+                }
+            },
+            {
+                "step": 7,
+                "description": "Prepare a Boltz docking submission referencing the receptor dataset and ligand",
+                "tool": "model_prepare_job",
+                "params": {
+                    "model_name": "boltz2",
+                    "inputs": {"sequence_dataset": "ligand_workflow_chains_5d5a", "entity": "5d5a_chain_A"},
+                    "config": {
+                        "output_name": "5d5a_A_CAU_dock",
+                        "ligand": {"id": "CAU", "smiles": "CC(C)NC1=NC(=O)N(C=C1)C2=CN=C(N)N=C2N"},
+                        "default_sequence_type": "protein"
+                    }
+                }
             }
         ]
     
@@ -798,47 +931,64 @@ class ProtoGuideTools(BaseTool):
         return [
             {
                 "step": 1,
-                "description": "Create property table from entities",
-                "tool": "create_property_table",
-                "params": {"dataset_name": "kinase_props", "entities": ["EGFR", "ERBB2", "BRAF"]}
+                "description": "Download structures that will anchor the analysis",
+                "tool": "download_entities",
+                "params": {
+                    "identifiers": ["3sn6", "5d5a", "6b73"],
+                    "processor_type": "structure",
+                    "dataset_name": "gpcr_structures"
+                }
             },
             {
                 "step": 2,
-                "description": "Add experimental properties",
-                "tool": "add_property_column",
+                "description": "Register custom reference sequences (e.g., curated chains)",
+                "tool": "sequence_register_records",
                 "params": {
-                    "dataset_name": "kinase_props",
-                    "property_name": "IC50_nM",
-                    "values": {"EGFR": 2.5, "ERBB2": 15.3, "BRAF": 0.8}
+                    "records": [
+                        {"name": "5d5a_chain_A", "sequence": "{paste_sequence}"},
+                        {"name": "6b73_chain_A", "sequence": "{paste_sequence}"}
+                    ],
+                    "dataset_name": "gpcr_sequences",
+                    "overwrite": True,
+                    "metadata": {"source": "property_workflow"}
                 }
             },
             {
                 "step": 3,
-                "description": "Add calculated properties",
-                "tool": "add_property_column",
-                "params": {
-                    "dataset_name": "kinase_props",
-                    "property_name": "mutation_count",
-                    "values": {"EGFR": 5, "ERBB2": 3, "BRAF": 8}
-                }
+                "description": "Load the registered sequences (and optionally preview them)",
+                "tool": "load_sequence_dataset",
+                "params": {"dataset_name": "gpcr_sequences", "include_sequences": True}
             },
             {
                 "step": 4,
-                "description": "Calculate statistics",
-                "tool": "get_property_statistics",
-                "params": {"dataset_name": "kinase_props", "property_name": "IC50_nM"}
+                "description": "Align each chain to a reference to obtain scores",
+                "tool": "align_sequences_by_id",
+                "params": {
+                    "entity1": "5d5a_chain_A",
+                    "entity2": "reference_chain",
+                    "alignment_method": "blosum62"
+                },
+                "note": "Repeat for every chain and capture the normalized scores for reporting."
             },
             {
                 "step": 5,
-                "description": "Filter by property",
-                "tool": "filter_entities_by_property",
-                "params": {"dataset_name": "kinase_props", "property_name": "IC50_nM", "operator": "<", "value": 10}
+                "description": "Record the per-chain metrics into a property table",
+                "tool": "record_property_rows",
+                "params": {
+                    "dataset_name": "gpcr_sequence_alignment",
+                    "rows": "[{entity_name: '5d5a_chain_A', 'scope': [{'format': 'sequence', 'name': '5d5a_chain_A'}], 'score': 0.82}]",
+                    "allow_create": True
+                }
             },
             {
                 "step": 6,
-                "description": "Export results",
-                "tool": "export_property_table",
-                "params": {"dataset_name": "kinase_props", "format": "csv"}
+                "description": "Query the property table for reporting or filtering",
+                "tool": "load_property_rows",
+                "params": {
+                    "dataset_name": "gpcr_sequence_alignment",
+                    "entity_name": "5d5a_chain_A",
+                    "scope_format": "sequence"
+                }
             }
         ]
     
@@ -847,42 +997,57 @@ class ProtoGuideTools(BaseTool):
         return [
             {
                 "step": 1,
-                "description": "Start with structures",
-                "tool": "download_entity",
-                "params": {"entity_id": "1atp", "source": "pdb", "processor_type": "structure"}
+                "description": "Generate ligand structures from SMILES",
+                "tool": "ligand_import_smiles_structures",
+                "params": {
+                    "smiles_map": {"DOPAMINE": "CNCCC1=CC(=C(C=C1)O)O"},
+                    "dataset_name": "ligand_smiles_demo",
+                    "generate_3d": True
+                }
             },
             {
                 "step": 2,
-                "description": "Extract sequences",
-                "tool": "extract_sequence_from_structure",
-                "params": {"pdb_id": "1atp", "chain_id": "E", "save_to_sequence": True}
+                "description": "Download/export the receptor structure for docking",
+                "tool": "structure_export_entity",
+                "params": {
+                    "structure_id": "5d5a",
+                    "format": "pdb",
+                    "output_path": "${DATA_ROOT}/exports/5d5a.pdb",
+                    "overwrite": True
+                }
             },
             {
                 "step": 3,
-                "description": "Extract ligands",
-                "tool": "extract_ligands_from_structure",
-                "params": {"pdb_id": "1atp"}
+                "description": "Export the generated ligand to SDF",
+                "tool": "structure_export_entity",
+                "params": {
+                    "structure_id": "ligand_smiles_demo_DOPAMINE",
+                    "format": "sdf",
+                    "output_path": "${DATA_ROOT}/exports/dopamine.sdf",
+                    "overwrite": True
+                }
             },
             {
                 "step": 4,
-                "description": "Assign GRN if applicable",
-                "tool": "assign_grn_to_sequences",
-                "params": {"sequences": {"1atp_E": "{from_step_2}"}, "family": "kinase"}
+                "description": "Prepare a Uni-Dock (or Boltz) job that references both files",
+                "tool": "model_prepare_job",
+                "params": {
+                    "model_name": "unidock",
+                    "inputs": {
+                        "receptor_pdb": "${DATA_ROOT}/exports/5d5a.pdb",
+                        "ligand_file": "${DATA_ROOT}/exports/dopamine.sdf"
+                    },
+                    "config": {"search_mode": "fast", "num_modes": 5}
+                }
             },
             {
                 "step": 5,
-                "description": "Create integrated property table",
-                "tool": "create_property_table",
-                "params": {"dataset_name": "integrated_analysis", "entities": ["1atp"]}
-            },
-            {
-                "step": 6,
-                "description": "Add multi-format properties",
-                "tool": "add_property_column",
+                "description": "Record docking metadata back into the property processor",
+                "tool": "record_property_rows",
                 "params": {
-                    "dataset_name": "integrated_analysis",
-                    "property_name": "has_atp",
-                    "values": {"1atp": True}
+                    "dataset_name": "smiles_docking_runs",
+                    "rows": "[{entity_name: '5d5a', 'scope': [{'format': 'structure', 'name': '5d5a'}], 'ligand': 'DOPAMINE', 'job_id': 'unidock_001'}]",
+                    "allow_create": True
                 }
             }
         ]
@@ -891,22 +1056,22 @@ class ProtoGuideTools(BaseTool):
         """Get workflow-specific tips."""
         tips = {
             "structure_analysis": [
-                "Always check if structures are downloaded before loading",
-                "Use chain_id parameter to focus on specific chains",
-                "Save sequences to sequence processor for further analysis",
-                "Consider resolution when comparing structures"
+                "Run config_initialize_data once per session so shared reference tables remain available",
+                "Use structure_prepare_grn_annotations instead of hand-written loops whenever you need numbered chains",
+                "Export annotated entities only after structure_apply_grn_annotations has written the GRN column",
+                "Keep track of dataset names returned by structure_prepare_grn_annotations for later reuse"
             ],
             "grn_assignment": [
-                "Ensure sequence identity > 25% for reliable GRN assignment",
-                "Use appropriate reference table for your protein family",
-                "Check coverage statistics to assess assignment quality",
-                "Save GRN tables for reproducibility"
+                "Alignment thresholds are normalized—start around 0.75 and adjust as needed",
+                "Always inspect the filtered dataset and GRN table before mapping back to structures",
+                "structure_apply_grn_annotations can remap existing entities without rerunning the full pipeline",
+                "Persist table names (e.g., gpcr_chain_filtered_grn) so subsequent workflows can load them directly"
             ],
             "ligand_analysis": [
-                "Exclude common molecules (water, ions) for meaningful results",
-                "Use appropriate cutoff distances for binding site analysis",
-                "Verify SMILES strings before property calculation",
-                "Consider stereochemistry in similarity searches"
+                "Call extract_ligands_from_structure first to confirm the ligand IDs you plan to analyze",
+                "ligand_compute_interactions now returns a dataframe—pipe it straight into record_property_rows",
+                "Register SMILES (save_entity or ligand_register_smiles) before invoking model_prepare_job",
+                "Reuse the sequence_dataset/entity returned by structure_prepare_grn_annotations when preparing Boltz jobs"
             ],
             "sequence_alignment": [
                 "Choose appropriate substitution matrix for your sequences",
@@ -915,16 +1080,16 @@ class ProtoGuideTools(BaseTool):
                 "Save alignments for visual inspection"
             ],
             "property_integration": [
-                "Ensure all entities exist before creating property tables",
-                "Use consistent units for numerical properties",
-                "Document property sources in metadata",
-                "Export tables for use in other tools"
+                "Record derived metrics with record_property_rows and scope definitions so they can be filtered later",
+                "Keep alignment or scoring metadata alongside experimental properties",
+                "Use load_property_rows to spot-check entries immediately after recording",
+                "Export tables only after validating units/metadata"
             ],
             "cross_format": [
-                "Plan data flow between processors",
-                "Save intermediate results at each step",
-                "Use entity names consistently across formats",
-                "Create datasets to organize related analyses"
+                "Plan the artifacts you need (structure exports, ligand SDFs, property rows) before invoking model_prepare_job",
+                "Use consistent naming when moving between structure, sequence, molecule, and property processors",
+                "Record session artifacts with context_status to track generated files",
+                "Prefer dataset-scoped analyses (e.g., ligand_smiles_demo) for reproducibility"
             ]
         }
         return tips.get(workflow_type, ["No specific tips available"])

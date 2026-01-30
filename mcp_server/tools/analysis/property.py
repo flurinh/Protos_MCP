@@ -1,6 +1,7 @@
 """Property table data and analysis tools backed by PropertyProcessor."""
 
 from typing import Dict, List, Optional, Any, Union, Callable
+import json
 import pandas as pd
 import numpy as np
 
@@ -43,12 +44,14 @@ class PropertyAnalysisTools(BaseTool):
                     "Use list_property_tables to see available tables.",
                 )
 
+            # Return metadata + limited preview only - full data stays in Protos context
+            max_preview = min(limit or 10, 10)  # Cap at 10 rows max
             payload = {
                 "table_name": table_name,
                 "row_count": int(len(table)),
                 "columns": table.columns.tolist(),
-                "data": table.head(limit).to_dict(orient="records") if limit else table.to_dict(orient="records"),
-                "truncated": bool(limit and len(table) > limit),
+                "preview": table.head(max_preview).to_dict(orient="records"),
+                "note": "Full table available in Protos context. Use property operations for analysis.",
             }
             return self.format_success(payload)
 
@@ -108,24 +111,43 @@ class PropertyAnalysisTools(BaseTool):
                 # Get property processor
                 processor = self.get_processor("property")
                 
-                # Convert list format to dict format if needed
-                if isinstance(data, list):
-                    data_dict = {}
+                # Convert data to property rows format with auto-generated scope
+                # This allows the model to create simple knowledge tables without
+                # worrying about the scope format
+                rows = []
+                if isinstance(data, dict):
+                    for entity_id, props in data.items():
+                        row = {
+                            "entity_name": entity_id,
+                            "scope": [{"format": "property", "name": entity_id}],
+                            **props,
+                        }
+                        rows.append(row)
+                elif isinstance(data, list):
                     for item in data:
-                        if 'entity_id' not in item:
+                        entity_id = item.get('entity_id') or item.get('entity_name')
+                        if not entity_id:
                             return self.format_error(
-                                "Missing entity_id in data items",
-                                "Each item must have an 'entity_id' key"
+                                "Missing entity_id/entity_name in data items",
+                                "Each item must have an 'entity_id' or 'entity_name' key"
                             )
-                        entity_id = item.pop('entity_id')
-                        data_dict[entity_id] = item
-                    data = data_dict
-                
-                # Create property table
-                df = processor.create_property_table(
-                    dataset_name=dataset_name,
-                    data=data,
-                    metadata=metadata
+                        row = {
+                            "entity_name": entity_id,
+                            "scope": item.get("scope", [{"format": "property", "name": entity_id}]),
+                        }
+                        # Add all other properties
+                        for k, v in item.items():
+                            if k not in ("entity_id", "entity_name", "scope"):
+                                row[k] = v
+                        rows.append(row)
+
+                # Create property table using record_properties
+                # Note: PropertyProcessor uses table_name, MCP uses dataset_name for consistency
+                df = processor.record_properties(
+                    table_name=dataset_name,
+                    rows=rows,
+                    metadata=metadata,
+                    allow_create=True,
                 )
                 
                 return self.format_success({
@@ -197,12 +219,14 @@ class PropertyAnalysisTools(BaseTool):
                 format_type=scope_format,
             )
 
+            # Return metadata + preview only - full data stays in Protos context
             return self.format_success(
                 {
                     "dataset_name": dataset_name,
                     "row_count": int(len(table)),
                     "columns": table.columns.tolist(),
-                    "data": table.to_dict(orient="records"),
+                    "preview": table.head(10).to_dict(orient="records"),
+                    "note": "Full data available in Protos context.",
                 }
             )
 
@@ -256,7 +280,152 @@ class PropertyAnalysisTools(BaseTool):
                 
             except Exception as e:
                 return self.handle_error(e)
-        
+
+        @server.tool()
+        def update_property_values(
+            ctx,
+            dataset_name: str,
+            updates: Dict[str, Dict[str, Any]],
+        ) -> Dict:
+            """
+            Update specific values in a property table.
+
+            Allows the model to modify individual cells or multiple properties
+            for specific entities without replacing the entire table.
+
+            Args:
+                dataset_name: Name of the property table
+                updates: Dict mapping entity_id to {property: new_value}
+                        Example: {"ADRB2": {"receptor_family": "Adrenergic (β)", "affinity": 5.2}}
+
+            Returns:
+                Dictionary with update status
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name, "updates": updates},
+                    ["dataset_name", "updates"]
+                ):
+                    return error
+
+                processor = self.get_processor("property")
+
+                # Load existing table
+                try:
+                    df = processor.load_table(dataset_name)
+                except Exception:
+                    return self.format_error(
+                        f"Property table '{dataset_name}' not found",
+                        "Create the table first with create_property_table or record_property_rows"
+                    )
+
+                # Property tables use entity_name column, not index
+                existing_entities = set(df["entity_name"].dropna().tolist()) if "entity_name" in df.columns else set()
+
+                # Apply updates
+                updated_entities = []
+                added_entities = []
+                new_columns = set()
+
+                for entity_id, props in updates.items():
+                    if entity_id in existing_entities:
+                        # Update existing entity's properties
+                        mask = df["entity_name"] == entity_id
+                        for prop, value in props.items():
+                            if prop not in df.columns:
+                                df[prop] = None
+                                new_columns.add(prop)
+                            df.loc[mask, prop] = value
+                        updated_entities.append(entity_id)
+                    else:
+                        # Add new entity row
+                        new_row = {
+                            "entity_name": entity_id,
+                            "scope": [{"format": "property", "name": entity_id}],
+                        }
+                        for prop, value in props.items():
+                            if prop not in df.columns:
+                                df[prop] = None
+                                new_columns.add(prop)
+                            new_row[prop] = value
+                        # Convert scope to JSON string for CSV storage
+                        new_row["scope"] = json.dumps(new_row["scope"])
+                        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                        added_entities.append(entity_id)
+
+                # Save the updated table
+                processor._write_table(dataset_name, df)
+
+                return self.format_success({
+                    "dataset_name": dataset_name,
+                    "updated_entities": updated_entities,
+                    "added_entities": added_entities,
+                    "new_columns": list(new_columns),
+                    "total_entities": len(df),
+                    "total_properties": len(df.columns),
+                })
+
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def delete_property_rows(
+            ctx,
+            dataset_name: str,
+            entity_ids: List[str],
+        ) -> Dict:
+            """
+            Delete specific rows (entities) from a property table.
+
+            Args:
+                dataset_name: Name of the property table
+                entity_ids: List of entity IDs to delete
+
+            Returns:
+                Dictionary with deletion status
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"dataset_name": dataset_name, "entity_ids": entity_ids},
+                    ["dataset_name", "entity_ids"]
+                ):
+                    return error
+
+                processor = self.get_processor("property")
+
+                # Load existing table
+                try:
+                    df = processor.load_table(dataset_name)
+                except Exception:
+                    return self.format_error(
+                        f"Property table '{dataset_name}' not found",
+                        "Check table name with list_property_tables"
+                    )
+
+                # Track what was deleted
+                deleted = []
+                not_found = []
+
+                for entity_id in entity_ids:
+                    if entity_id in df.index:
+                        df = df.drop(entity_id)
+                        deleted.append(entity_id)
+                    else:
+                        not_found.append(entity_id)
+
+                # Save the updated table
+                processor._write_table(dataset_name, df)
+
+                return self.format_success({
+                    "dataset_name": dataset_name,
+                    "deleted": deleted,
+                    "not_found": not_found,
+                    "remaining_entities": len(df),
+                })
+
+            except Exception as e:
+                return self.handle_error(e)
+
         @server.tool()
         def get_property_statistics(ctx, dataset_name: str,
                                   property_name: Optional[str] = None) -> Dict:
@@ -429,6 +598,9 @@ class PropertyAnalysisTools(BaseTool):
                 # Get filtered entities
                 entities = filtered_df.index.tolist()
                 
+                # In LLM-safe mode, limit the entity list further
+                max_entities = 20 if self.llm_safe_mode else 100
+
                 return self.format_success({
                     "dataset": dataset_name,
                     "filter": {
@@ -437,8 +609,8 @@ class PropertyAnalysisTools(BaseTool):
                         "value": value
                     },
                     "matched_entities": len(entities),
-                    "entities": entities[:100],  # First 100
-                    "truncated": len(entities) > 100
+                    "entities": entities[:max_entities],
+                    "truncated": len(entities) > max_entities
                 })
                 
             except Exception as e:
@@ -637,15 +809,27 @@ class PropertyAnalysisTools(BaseTool):
                         )
                     df = df[properties]
                 
-                # Convert to dict format
-                export_data = df.to_dict('index')
-                
-                return self.format_success({
-                    "dataset": dataset_name,
-                    "entities": len(df),
-                    "properties": df.columns.tolist(),
-                    "data": export_data
-                })
+                # In LLM-safe mode, return preview only
+                if self.llm_safe_mode:
+                    max_preview = min(10, len(df))
+                    preview_df = df.head(max_preview)
+                    return self.format_success({
+                        "dataset": dataset_name,
+                        "total_entities": len(df),
+                        "properties": df.columns.tolist(),
+                        "preview_entities": max_preview,
+                        "preview_data": preview_df.to_dict('index'),
+                        "note": "Showing preview only (LLM-safe mode). Full data saved to disk.",
+                    })
+                else:
+                    # Convert to dict format
+                    export_data = df.to_dict('index')
+                    return self.format_success({
+                        "dataset": dataset_name,
+                        "entities": len(df),
+                        "properties": df.columns.tolist(),
+                        "data": export_data
+                    })
                 
             except Exception as e:
                 return self.handle_error(e)

@@ -440,6 +440,18 @@ categories:
     capability: Gemmi troubleshooting
     description: Run the Gemmi debug helper to identify descriptor extraction failures,
       logging the component IDs that require manual intervention.
+  - id: M34
+    title: Lambda Submission Packaging
+    reference: workflows/model_lambda_via_tools.py:1
+    capability: ModelManager Lambda orchestration
+    description: Register the demo GPCR sequences via MCP tools, stage the packaged Lambda resources,
+      call `model_lambda_run`, and report whether the call produced inline predictions or an external job (including command, working directory, and packaged artifacts).
+  - id: M35
+    title: SMILES Docking Preparation
+    reference: workflows/smiles_docking_via_tools.py:1
+    capability: Ligand docking job assembly
+    description: Import the bundled SMILES ligands, export ligand/receptor artifacts through the MCP runtime,
+      and prepare a Uni-Dock submission by capturing the generated command, working directory, and artifact list for schedulers.
   hard:
   - id: H01
     title: GPCR Crystallization Planner

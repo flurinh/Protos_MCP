@@ -195,13 +195,24 @@ class StructureAnalysisTools(BaseTool):
                 }
 
                 if include_atoms:
-                    safe_limit = max(25, min(max_atoms, STRUCTURE_PREVIEW_LIMITS.max_rows))
-                    preview_model = build_dataframe_preview(
-                        reset,
-                        limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=safe_limit),
-                        label=structure_id,
-                    )
-                    payload["atom_preview"] = preview_model.export()
+                    # In LLM-safe mode, use much smaller preview to avoid context flooding
+                    if self.llm_safe_mode:
+                        llm_limit = min(max_atoms, self.llm_limits.max_atom_preview_rows)
+                        preview_model = build_dataframe_preview(
+                            reset,
+                            limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=llm_limit),
+                            label=structure_id,
+                        )
+                        payload["atom_preview"] = preview_model.export()
+                        payload["preview_note"] = f"Showing {llm_limit} of {atom_count} atoms (LLM-safe mode)"
+                    else:
+                        safe_limit = max(25, min(max_atoms, STRUCTURE_PREVIEW_LIMITS.max_rows))
+                        preview_model = build_dataframe_preview(
+                            reset,
+                            limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=safe_limit),
+                            label=structure_id,
+                        )
+                        payload["atom_preview"] = preview_model.export()
 
                 return self.format_success(payload)
             except Exception as exc:  # noqa: BLE001
@@ -450,7 +461,11 @@ class StructureAnalysisTools(BaseTool):
                     preview_records: List[Dict[str, Any]] = []
                     preview_summary: Optional[Dict[str, Any]] = None
                     if return_preview:
-                        safe_limit = max(25, min(preview_limit, STRUCTURE_PREVIEW_LIMITS.max_rows))
+                        # In LLM-safe mode, limit preview to 10 rows
+                        if self.llm_safe_mode:
+                            safe_limit = min(preview_limit, self.llm_limits.max_atom_preview_rows)
+                        else:
+                            safe_limit = max(25, min(preview_limit, STRUCTURE_PREVIEW_LIMITS.max_rows))
                         preview_model = build_dataframe_preview(
                             preview_frame,
                             limits=STRUCTURE_PREVIEW_LIMITS.override(max_rows=safe_limit),
@@ -547,21 +562,33 @@ class StructureAnalysisTools(BaseTool):
                 )
 
                 formatted: Dict[str, Any] = {}
+                preview_length = self.llm_limits.max_sequence_preview_chars
+
                 for struct_id, chains in collected.items():
-                    formatted[struct_id] = {
-                        chain_id: {
-                            "sequence": payload.get("sequence"),
+                    formatted[struct_id] = {}
+                    for chain_id, payload in chains.items():
+                        chain_data: Dict[str, Any] = {
                             "length": payload.get("length"),
                             "residue_span": payload.get("residue_span"),
                             "metadata": payload.get("metadata", {}),
                         }
-                        for chain_id, payload in chains.items()
-                    }
+
+                        # In LLM-safe mode, only include sequence preview
+                        if self.llm_safe_mode:
+                            seq = payload.get("sequence", "")
+                            if seq:
+                                chain_data["preview"] = self.get_sequence_preview(seq, preview_length)
+                        else:
+                            # Workflow mode: include full sequence
+                            chain_data["sequence"] = payload.get("sequence")
+
+                        formatted[struct_id][chain_id] = chain_data
 
                 return self.format_success(
                     {
                         "structure_ids": structure_ids,
                         "chain_sequences": formatted,
+                        "llm_safe_mode": self.llm_safe_mode,
                     }
                 )
             except Exception as exc:  # noqa: BLE001
@@ -681,33 +708,59 @@ class StructureAnalysisTools(BaseTool):
         def structure_export_entity(
             ctx,
             structure_id: str,
-            output_path: str,
+            output_path: Optional[str] = None,
             format: str = "cif",
             overwrite: bool = True,
         ) -> Dict:
-            """Export a single structure entity."""
+            """Export a structure entity to file.
+
+            If output_path is not provided, exports to the standard Protos-managed
+            location (e.g., structure/mmcif/{id}.cif for CIF format).
+
+            Args:
+                structure_id: Structure entity ID to export
+                output_path: Optional custom output path. If None, uses Protos-managed path.
+                format: Export format - 'cif' (default), 'pdb', or 'sdf'
+                overwrite: Whether to overwrite existing files (default: True)
+
+            Returns:
+                Dictionary with structure_id and export_path
+            """
 
             try:
                 if error := self.validate_required_params(
-                    {"structure_id": structure_id, "output_path": output_path},
-                    ["structure_id", "output_path"],
+                    {"structure_id": structure_id},
+                    ["structure_id"],
                 ):
                     return error
 
                 processor = self.get_processor("structure")
+
+                # If output_path provided, expand it; otherwise let exporter use default
+                out_path = Path(output_path).expanduser() if output_path else None
+
                 exported = processor.export_entity(
                     structure_id,
-                    Path(output_path).expanduser(),
+                    out_path,
                     format=format,
                     overwrite=overwrite,
                 )
+
+                # Get relative path for cleaner output
+                try:
+                    rel_path = exported.relative_to(processor.paths.data_root)
+                    path_str = str(rel_path)
+                except ValueError:
+                    path_str = str(exported)
 
                 return self.format_success(
                     {
                         "structure_id": structure_id,
                         "export_path": str(exported),
+                        "relative_path": path_str,
+                        "format": format,
                     },
-                    message="Structure exported",
+                    message=f"Structure exported to {path_str}",
                 )
             except Exception as exc:  # noqa: BLE001
                 return self.handle_error(exc)
@@ -981,9 +1034,14 @@ class StructureAnalysisTools(BaseTool):
                 result = {
                     "pdb_id": pdb_id,
                     "chain_id": chain_id,
-                    "sequence": sequence,
-                    "length": len(sequence)
+                    "length": len(sequence),
                 }
+
+                # In LLM-safe mode, only show preview
+                if self.llm_safe_mode:
+                    result["sequence_preview"] = self.get_sequence_preview(sequence)
+                else:
+                    result["sequence"] = sequence
                 
                 # Save to sequence processor if requested
                 if save_to_sequence:
@@ -1044,8 +1102,19 @@ class StructureAnalysisTools(BaseTool):
                 result = {
                     "pdb_id": pdb_id,
                     "chains": len(pdb_sequences),
-                    "sequences": pdb_sequences
                 }
+
+                # In LLM-safe mode, return previews and lengths instead of full sequences
+                if self.llm_safe_mode:
+                    result["sequences"] = {
+                        name: {
+                            "length": len(seq),
+                            "preview": self.get_sequence_preview(seq),
+                        }
+                        for name, seq in pdb_sequences.items()
+                    }
+                else:
+                    result["sequences"] = pdb_sequences
                 
                 # Save to sequence processor if requested
                 if save_to_sequence:
@@ -1157,13 +1226,22 @@ class StructureAnalysisTools(BaseTool):
                         f"Make sure {pdb_id} chain {chain_id} exists"
                     )
                 
-                return self.format_success({
+                payload = {
                     "pdb_id": pdb_id,
                     "chain_id": chain_id,
                     "num_residues": len(coords),
-                    "coordinates": coords.tolist(),  # Convert numpy array to list
-                    "shape": list(coords.shape)
-                })
+                    "shape": list(coords.shape),
+                }
+
+                # In LLM-safe mode, only show a small preview of coordinates
+                if self.llm_safe_mode:
+                    max_preview = min(5, len(coords))
+                    payload["coordinate_preview"] = coords[:max_preview].tolist()
+                    payload["preview_note"] = f"Showing {max_preview} of {len(coords)} residue coordinates (LLM-safe mode)"
+                else:
+                    payload["coordinates"] = coords.tolist()
+
+                return self.format_success(payload)
                 
             except Exception as e:
                 return self.handle_error(e)
@@ -1216,16 +1294,16 @@ class StructureAnalysisTools(BaseTool):
                     min_atoms=min_atoms
                 )
                 
-                # Format results
+                # Format results - convert numpy types to Python native types
                 ligand_summary = []
                 for ligand in ligands:
                     ligand_summary.append({
-                        "ligand_id": ligand['ligand_id'],
-                        "res_name": ligand['res_name3l'],
-                        "chain_id": ligand['chain_id'],
-                        "res_id": ligand['res_id'],
-                        "num_atoms": ligand['num_atoms'],
-                        "centroid": ligand['centroid'].tolist()
+                        "ligand_id": str(ligand['ligand_id']),
+                        "res_name": str(ligand['res_name3l']),
+                        "chain_id": str(ligand['chain_id']),
+                        "res_id": int(ligand['res_id']),
+                        "num_atoms": int(ligand['num_atoms']),
+                        "centroid": [float(x) for x in ligand['centroid']]
                     })
                 
                 return self.format_success({
@@ -1236,6 +1314,354 @@ class StructureAnalysisTools(BaseTool):
                     "min_atoms": min_atoms
                 })
                 
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def structure_remove_ligands(
+            ctx,
+            structure_id: str,
+            new_id: Optional[str] = None,
+            save: bool = True,
+        ) -> Dict:
+            """
+            Remove all HETATM records (ligands, waters, ions) from a structure.
+
+            This keeps only ATOM records (protein/nucleic acid), removing all
+            heteroatoms including ligands, waters, and ions.
+
+            Args:
+                structure_id: Structure to modify
+                new_id: Optional new ID for the stripped structure (default: overwrites original)
+                save: Whether to persist the modified structure (default: True)
+
+            Returns:
+                Dictionary with stripped structure info
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"structure_id": structure_id}, ["structure_id"]
+                ):
+                    return error
+
+                processor = self.get_processor("structure")
+                frame = processor.load_entity(structure_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{structure_id}' not found",
+                        "Download the structure first with download_entities",
+                    )
+
+                # Get original stats
+                df_reset = frame.reset_index()
+                original_atoms = len(df_reset)
+                hetatm_count = len(df_reset[df_reset['group'] == 'HETATM'])
+
+                # Remove HETATM records
+                stripped_df = processor.remove_hetatm(structure_id)
+
+                target_id = new_id or structure_id
+                if new_id and new_id != structure_id:
+                    # Copy to new ID
+                    processor._set_frame(target_id, stripped_df)
+
+                if save:
+                    processor.save_entity(target_id, stripped_df)
+
+                return self.format_success({
+                    "structure_id": target_id,
+                    "original_structure": structure_id,
+                    "original_atoms": original_atoms,
+                    "removed_hetatm": hetatm_count,
+                    "remaining_atoms": len(stripped_df),
+                    "saved": save,
+                }, message=f"Removed {hetatm_count} HETATM atoms from structure")
+
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def structure_remove_specific_ligand(
+            ctx,
+            structure_id: str,
+            ligand_residue_names: List[str],
+            keep_waters: bool = True,
+            keep_ions: bool = True,
+            new_id: Optional[str] = None,
+            save: bool = True,
+        ) -> Dict:
+            """
+            Remove specific ligands from a structure while optionally keeping waters and ions.
+
+            This is useful for preparing receptor structures for docking by removing
+            the co-crystallized ligand but preserving crystallographic waters and
+            structural ions.
+
+            Args:
+                structure_id: Structure to modify
+                ligand_residue_names: List of ligand residue names to remove (e.g., ['ZMA', 'ATP'])
+                keep_waters: Keep water molecules (HOH, WAT) - default True
+                keep_ions: Keep common ions (NA, CL, K, CA, MG, ZN, etc.) - default True
+                new_id: Optional new ID for the modified structure (default: overwrites original)
+                save: Whether to persist the modified structure (default: True)
+
+            Returns:
+                Dictionary with modified structure info including removed ligand counts
+
+            Example:
+                # First find ligands in structure
+                extract_ligands_from_structure(pdb_id="1XLX")
+                # Then remove specific ones
+                structure_remove_specific_ligand(
+                    structure_id="1XLX",
+                    ligand_residue_names=["ZMA"],  # Remove ZMA ligand
+                    keep_waters=True,
+                    keep_ions=True
+                )
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"structure_id": structure_id, "ligand_residue_names": ligand_residue_names},
+                    ["structure_id", "ligand_residue_names"]
+                ):
+                    return error
+
+                if not ligand_residue_names:
+                    return self.format_error(
+                        "No ligand residue names provided",
+                        "Use extract_ligands_from_structure to find ligand names, then specify them"
+                    )
+
+                processor = self.get_processor("structure")
+                frame = processor.load_entity(structure_id)
+                if frame is None:
+                    return self.format_error(
+                        f"Structure '{structure_id}' not found",
+                        "Download the structure first with download_entities",
+                    )
+
+                # Define what to keep
+                water_residues = {'HOH', 'WAT'}
+                ion_residues = {
+                    'NA', 'CL', 'K', 'CA', 'MG', 'ZN', 'FE', 'CU', 'MN',
+                    'CD', 'NI', 'HG', 'CO', 'SR', 'BA', 'RB', 'CS', 'IOD',
+                    'BR', 'F'
+                }
+
+                # Normalize ligand names to uppercase
+                ligands_to_remove = {name.upper() for name in ligand_residue_names}
+
+                # Get structure data
+                df_reset = frame.reset_index()
+                original_atoms = len(df_reset)
+
+                # Count HETATM by type before filtering
+                hetatm_df = df_reset[df_reset['group'] == 'HETATM']
+
+                # Get residue name column (might be 'res_name3l' or 'res_name')
+                res_col = 'res_name3l' if 'res_name3l' in df_reset.columns else 'res_name'
+
+                # Build filter for what to keep
+                # Keep all ATOM records
+                is_atom = df_reset['group'] == 'ATOM'
+
+                # For HETATM: keep waters if requested, keep ions if requested, remove specified ligands
+                is_hetatm = df_reset['group'] == 'HETATM'
+                hetatm_res_name = df_reset[res_col].str.upper()
+
+                # Start with keeping all HETATM
+                keep_hetatm = is_hetatm.copy()
+
+                # Remove specified ligands (only from HETATM records)
+                is_target_ligand = is_hetatm & hetatm_res_name.isin(ligands_to_remove)
+                keep_hetatm = keep_hetatm & ~is_target_ligand
+
+                # Optionally remove waters
+                if not keep_waters:
+                    is_water = is_hetatm & hetatm_res_name.isin(water_residues)
+                    keep_hetatm = keep_hetatm & ~is_water
+
+                # Optionally remove ions
+                if not keep_ions:
+                    is_ion = is_hetatm & hetatm_res_name.isin(ion_residues)
+                    keep_hetatm = keep_hetatm & ~is_ion
+
+                # Final filter: keep ATOM records and filtered HETATM records
+                keep_mask = is_atom | keep_hetatm
+                filtered_df = df_reset[keep_mask]
+
+                # Calculate what was removed
+                removed_ligand_count = is_target_ligand.sum()
+                removed_water_count = 0 if keep_waters else (is_hetatm & hetatm_res_name.isin(water_residues)).sum()
+                removed_ion_count = 0 if keep_ions else (is_hetatm & hetatm_res_name.isin(ion_residues)).sum()
+                total_removed = original_atoms - len(filtered_df)
+
+                # Re-canonicalize the filtered dataframe
+                target_id = new_id or structure_id
+                df_canonical = processor._ensure_canonical(filtered_df, target_id)
+
+                # Update processor frames
+                processor._set_frame(target_id, df_canonical)
+
+                if save:
+                    processor.save_entity(target_id, df_canonical)
+
+                # Get remaining HETATM stats
+                remaining_hetatm = len(df_canonical.reset_index().query("group == 'HETATM'")) if len(df_canonical) > 0 else 0
+
+                return self.format_success({
+                    "structure_id": target_id,
+                    "original_structure": structure_id,
+                    "original_atoms": original_atoms,
+                    "remaining_atoms": len(df_canonical),
+                    "removed_ligands": {
+                        "residue_names": list(ligands_to_remove),
+                        "atom_count": int(removed_ligand_count),
+                    },
+                    "kept_waters": keep_waters,
+                    "kept_ions": keep_ions,
+                    "removed_water_atoms": int(removed_water_count),
+                    "removed_ion_atoms": int(removed_ion_count),
+                    "total_removed": int(total_removed),
+                    "remaining_hetatm": remaining_hetatm,
+                    "saved": save,
+                }, message=f"Removed {removed_ligand_count} ligand atoms ({', '.join(ligands_to_remove)}), kept waters={keep_waters}, ions={keep_ions}")
+
+            except Exception as e:
+                return self.handle_error(e)
+
+        @server.tool()
+        def structure_merge(
+            ctx,
+            structure_ids: List[str],
+            new_id: str,
+            chain_mapping: Optional[Dict[str, str]] = None,
+            save: bool = True,
+            record_relationships: bool = True,
+            relationship_metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict:
+            """
+            Merge multiple structures into a single multi-chain structure.
+
+            Use this to combine a protein structure with a ligand structure,
+            or to create multi-chain complexes. The merged structure is saved
+            as a proper Protos entity with relationship tracking.
+
+            Args:
+                structure_ids: List of structure IDs to merge
+                new_id: ID for the merged structure
+                chain_mapping: Optional mapping of "{structure_id}:{chain_id}" -> "new_chain_id"
+                save: Whether to persist the merged structure (default: True)
+                record_relationships: Whether to record merged_from relationships (default: True)
+                relationship_metadata: Optional extra metadata for all relationships
+
+            Returns:
+                Dictionary with merged structure info including relationships
+            """
+            try:
+                if error := self.validate_required_params(
+                    {"structure_ids": structure_ids, "new_id": new_id},
+                    ["structure_ids", "new_id"]
+                ):
+                    return error
+
+                if not structure_ids or len(structure_ids) < 1:
+                    return self.format_error(
+                        "At least one structure required",
+                        "Provide structure IDs to merge"
+                    )
+
+                processor = self.get_processor("structure")
+
+                # Verify all structures exist and collect atom counts
+                source_info = {}
+                for struct_id in structure_ids:
+                    frame = processor.load_entity(struct_id)
+                    if frame is None:
+                        return self.format_error(
+                            f"Structure '{struct_id}' not found",
+                            "Download all structures before merging",
+                        )
+                    df_reset = frame.reset_index()
+                    chains = sorted(df_reset['auth_chain_id'].unique().tolist())
+                    source_info[struct_id] = {
+                        'atom_count': len(frame),
+                        'chains': chains,
+                    }
+
+                # Merge structures
+                merged_df = processor.merge_structures(
+                    structure_ids,
+                    new_id,
+                    chain_mapping=chain_mapping,
+                )
+
+                # Get chain info from merged structure
+                df_reset = merged_df.reset_index()
+                chains = sorted(df_reset['auth_chain_id'].unique().tolist())
+
+                if save:
+                    # Save with metadata about the merge
+                    merge_metadata = {
+                        'merge_sources': structure_ids,
+                        'chain_mapping': chain_mapping,
+                        'source_info': source_info,
+                    }
+                    if relationship_metadata:
+                        merge_metadata.update(relationship_metadata)
+                    processor.save_entity(new_id, merged_df, metadata=merge_metadata)
+
+                # Record relationships to track provenance
+                relationships_recorded = []
+                if save and record_relationships:
+                    entity_registry = processor.entity_registry
+                    for idx, struct_id in enumerate(structure_ids):
+                        rel_metadata = {
+                            'merge_position': idx,
+                            'source_atom_count': source_info[struct_id]['atom_count'],
+                            'source_chains': source_info[struct_id]['chains'],
+                        }
+                        if chain_mapping:
+                            # Find which chains from this source were mapped
+                            mapped_chains = {
+                                k.split(':')[1]: v for k, v in chain_mapping.items()
+                                if k.startswith(f"{struct_id}:")
+                            }
+                            if mapped_chains:
+                                rel_metadata['chain_mapping'] = mapped_chains
+                        if relationship_metadata:
+                            rel_metadata.update(relationship_metadata)
+
+                        try:
+                            entity_registry.add_relationship(
+                                source_name=struct_id,
+                                target_name=new_id,
+                                rel_type='merged_into',
+                                metadata=rel_metadata,
+                            )
+                            relationships_recorded.append({
+                                'source': struct_id,
+                                'target': new_id,
+                                'type': 'merged_into',
+                            })
+                        except Exception as rel_err:
+                            # Log but don't fail the merge
+                            import logging
+                            logging.getLogger(__name__).warning(
+                                f"Could not record relationship {struct_id} -> {new_id}: {rel_err}"
+                            )
+
+                return self.format_success({
+                    "merged_id": new_id,
+                    "source_structures": structure_ids,
+                    "total_atoms": len(merged_df),
+                    "chains": chains,
+                    "chain_count": len(chains),
+                    "saved": save,
+                    "relationships_recorded": relationships_recorded,
+                    "entity_path": f"structure/cache/{new_id}.pkl" if save else None,
+                }, message=f"Merged {len(structure_ids)} structures into {new_id}")
+
             except Exception as e:
                 return self.handle_error(e)
 
@@ -1274,11 +1700,24 @@ class StructureAnalysisTools(BaseTool):
                 min_atoms=min_atoms,
             )
 
+            # Sanitize water records for JSON serialization (remove numpy types and DataFrames)
+            sanitized_waters = []
+            for w in waters:
+                sanitized_waters.append({
+                    "ligand_id": str(w.get("ligand_id", "")),
+                    "pdb_id": str(w.get("pdb_id", "")),
+                    "res_name3l": str(w.get("res_name3l", "")),
+                    "chain_id": str(w.get("chain_id", "")),
+                    "res_id": int(w.get("res_id", 0)),
+                    "num_atoms": int(w.get("num_atoms", 0)),
+                    "centroid": [float(x) for x in w.get("centroid", [0, 0, 0])],
+                })
+
             return self.format_success(
                 {
                     "pdb_id": pdb_id,
-                    "water_count": len(waters),
-                    "waters": waters,
+                    "water_count": len(sanitized_waters),
+                    "waters": sanitized_waters,
                 }
             )
 
@@ -1613,7 +2052,15 @@ class StructureAnalysisTools(BaseTool):
                 }
 
                 if include_records:
-                    response["records"] = result["records"].to_dict(orient="records")
+                    records = result["records"].to_dict(orient="records")
+                    # In LLM-safe mode, limit records to prevent context flooding
+                    if self.llm_safe_mode:
+                        max_records = 20
+                        response["records"] = records[:max_records]
+                        if len(records) > max_records:
+                            response["records_note"] = f"Showing {max_records} of {len(records)} records"
+                    else:
+                        response["records"] = records
 
                 if include_plot_points:
                     response["plot_points"] = result["plot_points"]
@@ -1627,18 +2074,20 @@ class StructureAnalysisTools(BaseTool):
         def structure_get_binding_site_residues(ctx, pdb_id: str,
                                     ligand_name: str,
                                     chain_id: Optional[str] = None,
-                                    cutoff: float = 5.0) -> Dict:
+                                    cutoff: float = 5.0,
+                                    save_to_table: Optional[str] = None) -> Dict:
             """
             Get residues in the binding site of a ligand.
-            
+
             Args:
                 pdb_id: PDB identifier
                 ligand_name: Three-letter ligand code
                 chain_id: Optional chain specification
                 cutoff: Distance cutoff in Angstroms
-                
+                save_to_table: If provided, save residue data to this property table
+
             Returns:
-                Dictionary with binding site residues
+                Dictionary with binding site residues (or save confirmation)
             """
             try:
                 # Validate parameters
@@ -1695,6 +2144,30 @@ class StructureAnalysisTools(BaseTool):
                         "res_id": int(res['auth_seq_id'])
                     })
                 
+                # Save to property table if requested
+                if save_to_table:
+                    rows = []
+                    for res in residue_list:
+                        rows.append({
+                            "scope": [{"format": "structure", "name": pdb_id}],
+                            "pdb_id": pdb_id,
+                            "ligand": ligand_name,
+                            "ligand_chain": chain_id,
+                            "chain": res["chain"],
+                            "res_name": res["res_name"],
+                            "res_id": res["res_id"],
+                        })
+                    if rows:
+                        prop_proc = self.get_processor("property")
+                        prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                    return self.format_success({
+                        "saved": True,
+                        "table": save_to_table,
+                        "rows": len(rows),
+                        "pdb_id": pdb_id,
+                        "ligand": ligand_name,
+                    })
+
                 return self.format_success({
                     "pdb_id": pdb_id,
                     "ligand": ligand_name,
@@ -1704,36 +2177,32 @@ class StructureAnalysisTools(BaseTool):
                     "binding_site_residues": residue_list,
                     "total_atoms": len(binding_site['atoms'])
                 })
-                
+
             except Exception as e:
                 return self.handle_error(e)
-        
+
         @server.tool()
         def structure_analyze_ligand_interactions(ctx, pdb_id: str,
                                        ligand_name: str,
                                        chain_id: Optional[str] = None,
-                                       detailed: bool = True) -> Dict:
+                                       detailed: bool = True,
+                                       save_to_table: Optional[str] = None) -> Dict:
             """
             Analyze detailed protein-ligand interactions including multiple interaction types.
-            
+
             This tool provides comprehensive interaction analysis beyond simple distance cutoffs,
             including hydrogen bonds, hydrophobic contacts, pi-stacking, salt bridges, and
             water-mediated interactions.
-            
+
             Args:
                 pdb_id: PDB identifier
                 ligand_name: Three-letter ligand code (e.g., 'ATP', 'HEM')
                 chain_id: Optional chain specification for the ligand
                 detailed: If True, return detailed interaction lists; if False, only summary
-                
+                save_to_table: If provided, save interaction data to this property table
+
             Returns:
-                Dictionary with comprehensive interaction analysis including:
-                - Hydrogen bonds with donor/acceptor information
-                - Hydrophobic contacts
-                - Water-mediated bridges
-                - Pi-stacking interactions
-                - Salt bridges
-                - Binding site residue summary
+                Dictionary with comprehensive interaction analysis (or save confirmation)
             """
             try:
                 # Validate parameters
@@ -1789,7 +2258,7 @@ class StructureAnalysisTools(BaseTool):
                 }
                 
                 if detailed:
-                    # Include full interaction details
+                    # Interaction lists are compact and essential for reasoning
                     result.update({
                         "summary": interactions.get('summary', {}),
                         "binding_site": interactions.get('binding_site', {}),
@@ -1802,36 +2271,82 @@ class StructureAnalysisTools(BaseTool):
                 else:
                     # Only include summary
                     result["summary"] = interactions
-                
+
+                # Save to property table if requested
+                if save_to_table:
+                    rows = []
+                    summary = interactions.get('summary', {})
+                    # Create one row per binding residue with interaction counts
+                    binding_residues = interactions.get('binding_residues', [])
+                    if binding_residues:
+                        for res in binding_residues:
+                            rows.append({
+                                "scope": [{"format": "structure", "name": pdb_id}],
+                                "pdb_id": pdb_id,
+                                "ligand": ligand_name,
+                                "ligand_chain": chain_id,
+                                "chain_id": res.get("chain_id"),
+                                "res_id": res.get("res_id"),
+                                "res_name": res.get("res_name"),
+                                "min_distance": res.get("min_distance"),
+                                "num_contacts": res.get("num_contacts"),
+                            })
+                    else:
+                        # Single summary row if no per-residue data
+                        rows.append({
+                            "scope": [{"format": "structure", "name": pdb_id}],
+                            "pdb_id": pdb_id,
+                            "ligand": ligand_name,
+                            "ligand_chain": chain_id,
+                            "num_hydrogen_bonds": summary.get("num_hydrogen_bonds", 0),
+                            "num_hydrophobic": summary.get("num_hydrophobic", 0),
+                            "num_pi_stacking": summary.get("num_pi_stacking", 0),
+                            "num_salt_bridges": summary.get("num_salt_bridges", 0),
+                            "num_water_bridges": summary.get("num_water_bridges", 0),
+                        })
+                    if rows:
+                        prop_proc = self.get_processor("property")
+                        prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                    return self.format_success({
+                        "saved": True,
+                        "table": save_to_table,
+                        "rows": len(rows),
+                        "pdb_id": pdb_id,
+                        "ligand": ligand_name,
+                        "summary": summary,
+                    })
+
                 return self.format_success(result)
-                
+
             except Exception as e:
                 return self.handle_error(e)
-        
+
         @server.tool()
         def structure_analyze_binding_pocket(ctx, pdb_id: str,
                                  ligand_name: str,
                                  chain_id: Optional[str] = None,
                                  cutoff: float = 8.0,
-                                 include_volume: bool = True) -> Dict:
+                                 include_volume: bool = True,
+                                 save_to_table: Optional[str] = None) -> Dict:
             """
             Analyze the binding pocket around a ligand including volume estimation.
-            
+
             This tool provides comprehensive binding pocket analysis including:
             - Binding site residue identification
             - Pocket volume estimation using convex hull
             - Residue conservation potential
             - Pocket properties (hydrophobicity, charge distribution)
-            
+
             Args:
                 pdb_id: PDB identifier
                 ligand_name: Three-letter ligand code
                 chain_id: Optional chain specification for the ligand
                 cutoff: Distance cutoff for binding site definition (Angstroms)
                 include_volume: Whether to calculate pocket volume
-                
+                save_to_table: If provided, save residue data to this property table
+
             Returns:
-                Dictionary with binding pocket analysis
+                Dictionary with binding pocket analysis (or save confirmation)
             """
             try:
                 # Validate parameters
@@ -1918,7 +2433,8 @@ class StructureAnalysisTools(BaseTool):
                     "num_atoms": len(binding_site['atoms']),
                     "residue_composition": residue_counts,
                     "pocket_properties": pocket_properties,
-                    "binding_residues": residue_list
+                    # Binding pocket residues are compact and essential for reasoning
+                    "binding_residues": residue_list,
                 }
                 
                 # Calculate pocket volume if requested
@@ -1937,10 +2453,38 @@ class StructureAnalysisTools(BaseTool):
                 # Identify key interaction residues (closest to ligand)
                 closest_residues = residues_df.nsmallest(5, 'min_distance')
                 result["key_residues"] = [
-                    f"{row['res_name']}{row['res_id']}" 
+                    f"{row['res_name']}{row['res_id']}"
                     for _, row in closest_residues.iterrows()
                 ]
-                
+
+                # Save to property table if requested
+                if save_to_table:
+                    rows = []
+                    for res in residue_list:
+                        rows.append({
+                            "scope": [{"format": "structure", "name": pdb_id}],
+                            "pdb_id": pdb_id,
+                            "ligand": ligand_name,
+                            "ligand_chain": chain_id,
+                            "residue": res["residue"],
+                            "chain": res["chain"],
+                            "distance": res["distance"],
+                            "num_atoms": res["num_atoms"],
+                        })
+                    if rows:
+                        prop_proc = self.get_processor("property")
+                        prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                    return self.format_success({
+                        "saved": True,
+                        "table": save_to_table,
+                        "rows": len(rows),
+                        "pdb_id": pdb_id,
+                        "ligand": ligand_name,
+                        "num_residues": len(residues_df),
+                        "pocket_properties": pocket_properties,
+                        "key_residues": result["key_residues"],
+                    })
+
                 return self.format_success(result)
                 
             except Exception as e:
@@ -2144,22 +2688,24 @@ class StructureAnalysisTools(BaseTool):
         def calculate_structure_rmsd_matrix(ctx, pdb_ids: List[str],
                                           atom_selection: str = "CA",
                                           chain_selection: Optional[str] = None,
-                                          mode: str = "all_vs_all") -> Dict:
+                                          mode: str = "all_vs_all",
+                                          save_to_table: Optional[str] = None) -> Dict:
             """
             Calculate RMSD matrix between multiple structures.
-            
+
             This tool performs pairwise structural alignments between multiple
             proteins and returns an RMSD matrix. Can operate in all-vs-all mode
             or one-vs-all mode.
-            
+
             Args:
                 pdb_ids: List of PDB IDs to compare
                 atom_selection: Atom type to use for alignment ("CA", "backbone", "all")
                 chain_selection: Specific chain to align, or None for all
                 mode: Comparison mode ("all_vs_all" or "one_vs_all")
-                
+                save_to_table: If provided, save pairwise RMSD values to this property table
+
             Returns:
-                Dictionary with RMSD matrix and statistics
+                Dictionary with RMSD matrix and statistics (or save confirmation)
             """
             try:
                 # Validate parameters
@@ -2245,6 +2791,33 @@ class StructureAnalysisTools(BaseTool):
                         for j in range(i + 1, len(structure_ids)):
                             rmsd_values.append(rmsd_matrix[i, j])
                     
+                    # Save to property table if requested
+                    if save_to_table:
+                        rows = []
+                        for i, id1 in enumerate(structure_ids):
+                            for j, id2 in enumerate(structure_ids):
+                                if i < j:  # Only upper triangle
+                                    rows.append({
+                                        "scope": [{"format": "structure", "name": id1}],
+                                        "structure_1": id1,
+                                        "structure_2": id2,
+                                        "rmsd": round(float(rmsd_matrix[i, j]), 3),
+                                        "atom_selection": atom_selection,
+                                        "chain_selection": chain_selection,
+                                    })
+                        if rows:
+                            prop_proc = self.get_processor("property")
+                            prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                        return self.format_success({
+                            "saved": True,
+                            "table": save_to_table,
+                            "rows": len(rows),
+                            "num_structures": len(structure_ids),
+                            "min_rmsd": round(float(min(rmsd_values)), 3) if rmsd_values else 0,
+                            "max_rmsd": round(float(max(rmsd_values)), 3) if rmsd_values else 0,
+                            "mean_rmsd": round(float(sum(rmsd_values) / len(rmsd_values)), 3) if rmsd_values else 0,
+                        })
+
                     return self.format_success({
                         "mode": "all_vs_all",
                         "num_structures": len(structure_ids),
@@ -2256,16 +2829,41 @@ class StructureAnalysisTools(BaseTool):
                         "atom_selection": atom_selection,
                         "chain_selection": chain_selection
                     })
-                    
+
                 else:  # one_vs_all
                     rmsd_list, compared_ids = structure_comparison_1va(processed_structures)
                     reference_id = list(processed_structures.keys())[0]
-                    
+
                     # Create dictionary format
                     rmsd_dict = {reference_id: {}}
                     for i, comp_id in enumerate(compared_ids):
                         rmsd_dict[reference_id][comp_id] = round(float(rmsd_list[i]), 3)
-                    
+
+                    # Save to property table if requested
+                    if save_to_table:
+                        rows = []
+                        for i, comp_id in enumerate(compared_ids):
+                            rows.append({
+                                "scope": [{"format": "structure", "name": reference_id}],
+                                "reference": reference_id,
+                                "compared": comp_id,
+                                "rmsd": round(float(rmsd_list[i]), 3),
+                                "atom_selection": atom_selection,
+                                "chain_selection": chain_selection,
+                            })
+                        if rows:
+                            prop_proc = self.get_processor("property")
+                            prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                        return self.format_success({
+                            "saved": True,
+                            "table": save_to_table,
+                            "rows": len(rows),
+                            "reference_structure": reference_id,
+                            "min_rmsd": round(float(min(rmsd_list)), 3) if rmsd_list else 0,
+                            "max_rmsd": round(float(max(rmsd_list)), 3) if rmsd_list else 0,
+                            "mean_rmsd": round(float(sum(rmsd_list) / len(rmsd_list)), 3) if rmsd_list else 0,
+                        })
+
                     return self.format_success({
                         "mode": "one_vs_all",
                         "reference_structure": reference_id,
@@ -2277,7 +2875,7 @@ class StructureAnalysisTools(BaseTool):
                         "atom_selection": atom_selection,
                         "chain_selection": chain_selection
                     })
-                    
+
             except Exception as e:
                 return self.handle_error(e)
         
@@ -2402,27 +3000,25 @@ class StructureAnalysisTools(BaseTool):
         @server.tool()
         def structure_compare_ligand_binding_sites(ctx, structures: List[Dict[str, str]],
                                        cutoff: float = 5.0,
-                                       similarity_threshold: float = 0.5) -> Dict:
+                                       similarity_threshold: float = 0.5,
+                                       save_to_table: Optional[str] = None) -> Dict:
             """
             Compare binding sites across multiple protein-ligand complexes.
-            
+
             This tool analyzes binding site conservation across structures, useful for:
             - Understanding binding mode conservation
             - Identifying key interaction residues
             - Comparing different ligands in the same pocket
             - Analyzing conformational changes upon ligand binding
-            
+
             Args:
                 structures: List of dicts with 'pdb_id', 'ligand_name', and optional 'chain_id'
                 cutoff: Distance cutoff for binding site definition (Angstroms)
                 similarity_threshold: Jaccard similarity threshold for grouping similar sites
-                
+                save_to_table: If provided, save pairwise comparison data to this property table
+
             Returns:
-                Dictionary with binding site comparison results including:
-                - Pairwise binding site similarities
-                - Conserved residues across all structures
-                - Binding site clustering
-                - Key differences between sites
+                Dictionary with binding site comparison results (or save confirmation)
             """
             try:
                 # Validate parameters
@@ -2576,9 +3172,34 @@ class StructureAnalysisTools(BaseTool):
                     "similar_site_groups": site_groups,
                     "similarity_threshold": similarity_threshold
                 }
-                
+
+                # Save to property table if requested
+                if save_to_table:
+                    rows = []
+                    for comp in comparisons:
+                        rows.append({
+                            "scope": [{"format": "structure", "name": comp["site1"].split("_")[0]}],
+                            "site1": comp["site1"],
+                            "site2": comp["site2"],
+                            "similarity": comp["similarity"],
+                            "num_shared": len(comp["shared_residues"]),
+                            "num_unique_site1": len(comp["unique_to_site1"]),
+                            "num_unique_site2": len(comp["unique_to_site2"]),
+                        })
+                    if rows:
+                        prop_proc = self.get_processor("property")
+                        prop_proc.record_properties(save_to_table, rows, allow_create=True)
+                    return self.format_success({
+                        "saved": True,
+                        "table": save_to_table,
+                        "rows": len(rows),
+                        "num_structures": len(structures),
+                        "conserved_residues": sorted(list(conserved_residues)),
+                        "conservation_ratio": result["conservation_ratio"],
+                    })
+
                 return self.format_success(result)
-                
+
             except Exception as e:
                 return self.handle_error(e)
 
@@ -2855,9 +3476,20 @@ class StructureAnalysisTools(BaseTool):
                 result = {
                     "pdb_id": pdb_id,
                     "chains_extracted": chains_to_extract,
-                    "sequences": sequences,
                     "sequence_count": len(sequences),
                 }
+
+                # In LLM-safe mode, return previews instead of full sequences
+                if self.llm_safe_mode:
+                    result["sequences"] = {
+                        name: {
+                            "length": len(seq),
+                            "preview": self.get_sequence_preview(seq),
+                        }
+                        for name, seq in sequences.items()
+                    }
+                else:
+                    result["sequences"] = sequences
                 
                 # Save as FASTA if requested
                 if save_as_fasta and sequences:
@@ -3062,21 +3694,28 @@ class StructureAnalysisTools(BaseTool):
             }
 
             if include_data:
-                data = graph_payload.get("graph")
-                if hasattr(data, "to_dict"):
-                    preview = data.to_dict()
+                # In LLM-safe mode, don't return full graph data (can be very large)
+                if self.llm_safe_mode:
+                    response["graph_data_note"] = (
+                        "Full graph data not returned in LLM-safe mode. "
+                        "Graph is stored in Protos context for analysis."
+                    )
                 else:
-                    preview = data
+                    data = graph_payload.get("graph")
+                    if hasattr(data, "to_dict"):
+                        preview = data.to_dict()
+                    else:
+                        preview = data
 
-                if isinstance(preview, dict) and "x" in preview:
-                    node_features = preview["x"]
-                    if hasattr(node_features, "detach"):
-                        node_features = node_features.detach().cpu()
-                    if hasattr(node_features, "numpy"):
-                        node_features = node_features.numpy()
-                    response["node_features_preview"] = node_features[:preview_nodes].tolist()
+                    if isinstance(preview, dict) and "x" in preview:
+                        node_features = preview["x"]
+                        if hasattr(node_features, "detach"):
+                            node_features = node_features.detach().cpu()
+                        if hasattr(node_features, "numpy"):
+                            node_features = node_features.numpy()
+                        response["node_features_preview"] = node_features[:preview_nodes].tolist()
 
-                response["graph_data"] = preview
+                    response["graph_data"] = preview
 
             return self.format_success(response)
 
