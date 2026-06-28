@@ -8,7 +8,7 @@
 <p align="center"><img src="docs/architecture.jpg" alt="Sequence diagram: Scientist to AI to MCP to ProtOS and back" width="760"></p>
 
 <p align="center">
-  <a href="https://flurinh.github.io">◆ Portfolio</a> &nbsp;·&nbsp;
+  <a href="https://flurinh.github.io/aboutme">◆ Portfolio</a> &nbsp;·&nbsp;
   <b>The build:</b>
   <a href="https://github.com/flurinh/LM-DTA">LM-DTA</a> →
   <a href="https://github.com/flurinh/mt">Master thesis</a> →
@@ -30,7 +30,7 @@ tools**, and adds a **workflow recipe engine** and an **agentic-task benchmark s
 
 ## ▶ See it run
 
-**[Watch a live four-turn session](https://flurinh.github.io/#protos-mcp)** on the portfolio:
+**[Watch a live four-turn session](https://flurinh.github.io/aboutme/#protos-mcp)** on the portfolio:
 the agent orients itself, ingests a sequence, predicts its λmax with
 **[Lambda](https://github.com/flurinh/lambda)**, then engineers a redshift — redesigning the
 Rhodozyme enzyme one mutation at a time.
@@ -62,5 +62,5 @@ python -m pytest mcp_server/tests -q
 <p align="center">
 ◀ <b>Previously:</b> <a href="https://github.com/flurinh/lambda">Lambda — predicting opsin colour</a>
 &nbsp;·&nbsp;
-<b>Next:</b> <a href="https://flurinh.github.io/#rhodozyme">Rhodozyme & Cauldron — what it builds</a> ▶
+<b>Next:</b> <a href="https://flurinh.github.io/aboutme/#rhodozyme">Rhodozyme & Cauldron — what it builds</a> ▶
 </p>
