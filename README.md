@@ -7,16 +7,15 @@
 
 <p align="center"><img src="docs/architecture.jpg" alt="Sequence diagram: Scientist to AI to MCP to ProtOS and back" width="760"></p>
 
-<p align="center">
-  <a href="https://flurinh.github.io/aboutme">◆ Portfolio</a> &nbsp;·&nbsp;
-  <b>The build:</b>
-  <a href="https://github.com/flurinh/LM-DTA">LM-DTA</a> →
-  <a href="https://github.com/flurinh/mt">Master thesis</a> →
-  <a href="https://github.com/flurinh/protos">ProtOS</a> →
-  <a href="https://github.com/flurinh/MOGRN">MOGRN</a> →
-  <a href="https://github.com/flurinh/lambda">Lambda</a> →
-  <b>ProtOS-MCP</b>
-</p>
+<p align="center"><a href="https://flurinh.github.io/aboutme">◆ Portfolio</a></p>
+
+<p align="center"><i>You may also be interested in</i></p>
+
+<table align="center"><tr>
+<td align="left">←&nbsp; <b>Previous work</b><br><a href="https://github.com/flurinh/lambda">Lambda — predicting opsin colour</a></td>
+<td width="56"></td>
+<td align="right"><b>Continuation of this project</b> &nbsp;→<br><a href="https://flurinh.github.io/aboutme/#rhodozyme">Rhodozyme & Cauldron — what it builds</a></td>
+</tr></table>
 
 ---
 
@@ -57,10 +56,3 @@ python -m pytest mcp_server/tests -q
 - `claude_server.py` / `ollama_server.py` — runnable entry points
 - `WORKFLOWS.md` — zero-config data flow, processor workflows, and the full tool catalog
 
----
-
-<p align="center">
-◀ <b>Previously:</b> <a href="https://github.com/flurinh/lambda">Lambda — predicting opsin colour</a>
-&nbsp;·&nbsp;
-<b>Next:</b> <a href="https://flurinh.github.io/aboutme/#rhodozyme">Rhodozyme & Cauldron — what it builds</a> ▶
-</p>
