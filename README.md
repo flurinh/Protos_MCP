@@ -1,28 +1,66 @@
-# Protos-MCP
+<h1 align="center">ProtOS-MCP</h1>
 
-Protos-MCP couples the Protos structural biology toolkit with Model Context Protocol (MCP) servers so agents can run structure-centric workflows end-to-end. Protos supplies zero-configuration processors for structures, sequences, GRNs, ligands, properties, embeddings, and graphs; the MCP layer wraps those processors behind stateless JSON tools for Claude, Ollama, or any MCP-compatible client.
+<p align="center">
+  <b>Let LLM agents drive a structural-biology toolkit, end to end.</b><br>
+  Model Context Protocol servers that wrap <a href="https://github.com/flurinh/protos">ProtOS</a> as clean, stateless JSON tools — for Claude, Ollama, or any MCP client.
+</p>
 
-## Repository Layout
-- `protos/src/protos` – core processors, analysis modules, and CLI entry points (installed with `pip install -e protos`).
-- `protos/data` & `protos/resources` – bundled datasets, reference tables, and HTML assets used by processors and docs.
-- `mcp_server/core` – shared MCP runtime (contexts, processor factory, error types).
-- `mcp_server/tools` – MCP tool implementations grouped by analysis domain, loaders, datasets, and model workflows.
-- `claude_server.py` / `ollama_server.py` – runnable entry points that expose the default MCP tool suite.
+<p align="center"><img src="docs/architecture.jpg" alt="Sequence diagram: Scientist to AI to MCP to ProtOS and back" width="760"></p>
 
-## Getting Started
-1. `pip install -e protos` to develop against the Protos library.
-2. `pip install -r requirements-mcp.txt` to add MCP-facing dependencies.
-3. Run `python claude_server.py` or `python ollama_server.py` for manual smoke tests.
-4. Execute `python -m pytest protos/tests` for processor coverage (use `-m "not integration"` to skip network-heavy checks) and `python -m pytest mcp_server/tests -q` for MCP tooling tests.
+<p align="center">
+  <a href="https://flurinh.github.io">◆ Portfolio</a> &nbsp;·&nbsp;
+  <b>The build:</b>
+  <a href="https://github.com/flurinh/LM-DTA">LM-DTA</a> →
+  <a href="https://github.com/flurinh/mt">Master thesis</a> →
+  <a href="https://github.com/flurinh/protos">ProtOS</a> →
+  <a href="https://github.com/flurinh/MOGRN">MOGRN</a> →
+  <a href="https://github.com/flurinh/lambda">Lambda</a> →
+  <b>ProtOS-MCP</b>
+</p>
 
-## Development Guidelines
-- Format touched Python modules with `black` (88 columns) and `isort`; both are configured in `protos/pyproject.toml`.
-- Add type hints to new public functions and keep `mypy --strict` clean; processors expose human-readable entity names only.
-- Reuse `ProtosPaths` for all filesystem access—never hardcode data directories; rely on dataset helpers and the entity registry.
-- When expanding MCP coverage, implement tools under `mcp_server/tools/**` and register them in `mcp_server/runtime.py`.
+---
 
-## Documentation Map
-- `WORKFLOWS.md` details zero-config data flow, processor workflows (GRN, property, ligand, embeddings, graphs), and provides a full MCP tool catalog with naming guidance.
-- `STATUS_TODO.md` tracks processor migration progress, open refactor items (e.g., model platform work), research threads, and naming clean-up tasks for the MCP surface area.
+## What it is
 
-Refer to those documents when planning new features or aligning tool names with the established patterns.
+ProtOS-MCP couples the ProtOS structural-biology toolkit with **Model Context Protocol**
+servers, so an agent can run structure-centric workflows from a single natural-language
+request. ProtOS supplies zero-configuration processors (structures, sequences, GRNs,
+ligands, properties, embeddings, graphs); the MCP layer wraps them behind **stateless JSON
+tools**, and adds a **workflow recipe engine** and an **agentic-task benchmark suite**.
+
+## ▶ See it run
+
+**[Watch a live four-turn session](https://flurinh.github.io/#protos-mcp)** on the portfolio:
+the agent orients itself, ingests a sequence, predicts its λmax with
+**[Lambda](https://github.com/flurinh/lambda)**, then engineers a redshift — redesigning the
+Rhodozyme enzyme one mutation at a time.
+
+## Getting started
+
+```bash
+pip install -e protos                 # the ProtOS library
+pip install -r requirements-mcp.txt   # MCP-facing dependencies
+python claude_server.py               # or: python ollama_server.py
+```
+
+Run the tests:
+
+```bash
+python -m pytest protos/tests -m "not integration"
+python -m pytest mcp_server/tests -q
+```
+
+## Layout
+
+- `mcp_server/core` — shared MCP runtime (contexts, processor factory, error types)
+- `mcp_server/tools` — tool implementations grouped by analysis domain
+- `claude_server.py` / `ollama_server.py` — runnable entry points
+- `WORKFLOWS.md` — zero-config data flow, processor workflows, and the full tool catalog
+
+---
+
+<p align="center">
+◀ <b>Previously:</b> <a href="https://github.com/flurinh/lambda">Lambda — predicting opsin colour</a>
+&nbsp;·&nbsp;
+<b>Next:</b> <a href="https://flurinh.github.io/#rhodozyme">Rhodozyme & Cauldron — what it builds</a> ▶
+</p>
